@@ -3,7 +3,7 @@ const schema = mongoose.Schema;
 
 
 const skillschema = new schema({
-   skillname: {
+  title: {
     type: String,
     required: true
   },
@@ -11,6 +11,19 @@ const skillschema = new schema({
     type: String,
     required: true
   },
+  category: {
+    type: String,
+    required: true
+  },
+  level: {
+    type: String,
+    required: true
+  },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true
+  }
 },
 {timestamps: true})
 

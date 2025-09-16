@@ -2,7 +2,11 @@ const express = require("express");
 const mongoose = require("mongoose");
 const userRoutes = require("./authentification/user-routes");
 const serviceRoutes = require("./Service-management/service-routes")
+const profileRoutes = require("./Profile_management/profile-routes");
+
 const app = express();
+const dotenv = require("dotenv");
+dotenv.config();
 app.use(express.json({}));
 mongoose.connect("mongodb://localhost:27017/mydatabase");
 if (mongoose.connection) {
@@ -11,6 +15,7 @@ if (mongoose.connection) {
 
 app.use("/api/users", userRoutes);
 app.use("/api/services", serviceRoutes);
+app.use("/api/profile", profileRoutes);
 
 const port = 5000;
 app.listen(port, () => {
