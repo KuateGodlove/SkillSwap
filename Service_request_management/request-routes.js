@@ -1,26 +1,41 @@
-const express = require("express");
-const {
-  createRequest,
-  getMyRequests,
-  getRequestsForMe,
-  updateRequestStatus,
-  deleteRequest,
-  getRequestDetails,
-  acceptRequest,
-  rejectRequest,
-} = require('./request-controller.js');
-const checkAuth = require("../auth-middleware");
-
+const express = require('express');
 const router = express.Router();
+const requestController = require('./request-controller');
+const checkAuth = require("../auth-middleware");
+const upload = require('../utils/upload');
+
 router.use(checkAuth);
 
-router.post("/create", createRequest);         // Create request
-router.get("/sent", getMyRequests);            // My sent requests
-router.get("/received", getRequestsForMe);     // Requests for me
-router.put("/:id", updateRequestStatus);       // Accept / Reject
-router.delete("/:id", deleteRequest);          // Delete request
-router.get("/:id", getRequestDetails);       // Get details 
-router.put("/:id/accept", acceptRequest);    // Accept a request
-router.put("/:id/reject", rejectRequest);    // Reject a request
+// ✅ SPECIFIC routes FIRST (before catch-all :id)
+router.get('/saved', requestController.getSavedRequests);
+router.get('/stats/overview', requestController.getRequestStats);
+router.get('/user/:userId', requestController.getUserRequests);
+
+// ✅ THEN general routes
+router.get('/', requestController.getRequests);
+
+// ✅ POST routes
+router.post(
+  '/',
+  upload.array('attachments', 5),
+  requestController.createRequest
+);
+
+router.post('/:id/save', requestController.toggleSaveRequest);
+
+// ✅ PUT/PATCH routes
+router.put(
+  '/:id',
+  upload.array('attachments', 5),
+  requestController.updateRequest
+);
+
+router.patch('/:id/status', requestController.updateRequestStatus);
+
+// ✅ DELETE routes
+router.delete('/:id', requestController.deleteRequest);
+
+// ✅ CATCH-ALL :id route LAST
+router.get('/:id', requestController.getRequestById);
 
 module.exports = router;
