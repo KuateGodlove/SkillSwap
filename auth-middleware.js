@@ -18,7 +18,8 @@ const checkAuth = (req, res, next) => {
             return res.status(403).json({message: "Invalid token"});
         }
         console.log("User authenticated:", user);
-        req.user = user.user;
+        req.user = user; // Attach user info to request object
+
         next();
     });
 }

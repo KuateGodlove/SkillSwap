@@ -5,6 +5,6 @@ const checkAuth = require("../auth-middleware");
 const router = express.Router();
 router.use(checkAuth);
 
-router.get('/profile', getProfileController);
+router.get('/Myprofile', getProfileController);
 router.put("/updateprofile", updateProfilecontroller);
 module.exports = router;

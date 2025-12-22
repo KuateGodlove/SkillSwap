@@ -6,39 +6,24 @@ const userModel = require('../authentification/user-model');
 module.exports = {
 
 // Remove a service from the user's profile
-     removeServiceController : async (req, res) => {
-         const { serviceId } = req.params; // service id to remove
+    removeServiceController: async (req, res) => {
   try {
-    const userId =req.user._id;
-
-
-const servicetoremove = await serviceModel.findById({_id: serviceId})
-    // Check if service exists
-    if (!servicetoremove) {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ message: "Service ID is required" });
+    }
+    const deleted = await serviceModel.findByIdAndDelete(id);
+    if (!deleted) {
       return res.status(404).json({ message: "Service not found" });
     }
-
-    // Remove service
-    const verifyservice = await serviceModel.findOne({userId: userId, _id: serviceId});
-    console.log(await serviceModel.findOne({userId: userId, _id: serviceId}));
-
-    if (!verifyservice) {
-      return res.status(404).json({ message: "Service not found for this user" });
-    }
-
-    await serviceModel.deleteOne({userId: userId, _id: serviceId});
-    return res.status(200).json({
-      message: "Service removed successfully",
-
-    });
+    res.json({ success: true, message: "Service deleted successfully" });
   } catch (error) {
-    console.error("Error removing service:", error);
-    return res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 },
 
- // Addservicecontrollers/serviceController.js
- addServiceController : async (req, res) => {
+// Add service controller
+    addServiceController: async (req, res) => {
   try {
     const { title, description, category, level  } = req.body;
 
@@ -51,7 +36,7 @@ const servicetoremove = await serviceModel.findById({_id: serviceId})
       description,
       category,
       level,
-      userId: req.user._id
+      userId: req.user.userId
     });
 
       await newService.save();
@@ -69,25 +54,25 @@ const servicetoremove = await serviceModel.findById({_id: serviceId})
  },
 
 // List all services of a specific user
-    listUserServicesController : async (req, res) => {
+    listUserServicesController: async (req, res) => {
   try {
     const { userId } = req.params;
 
     // Check if user exists
-    const user = await userModel.findById({_id:userId});
+    const user = await userModel.findById(userId); 
+
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     // Fetch user's services
-
-const services = await serviceModel.find({ userId }); // assuming `userId` field in Service references User
+    const services = await serviceModel.find({ userId }); // userId field in Service references User
 
     res.status(200).json({
       success: true,
       user: {
         id: user._id,
-        name: user.name,
+        name: user.name || user.firstName || "",
         email: user.email
       },
       services
@@ -118,5 +103,31 @@ const services = await serviceModel.find({ userId }); // assuming `userId` field
     });
   }
 },
+// ✅ Get details of a specific service
+    getServiceDetailsController : async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    // Find the service by ID and populate the user who offers it
+    const service = await ServiceModel.findById(id).populate('userId', 'firstname lastname email avatar');
+
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: service,
+    });
+  } catch (error) {
+    console.error('Error fetching service details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
+  }
+}
 };

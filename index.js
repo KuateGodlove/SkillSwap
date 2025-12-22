@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const userRoutes = require("./authentification/user-routes");
 const serviceRoutes = require("./Service-management/service-routes")
 const profileRoutes = require("./Profile_management/profile-routes");
+const requestRoutes = require("./Service_request_management/request-routes");
 
 const app = express();
 const dotenv = require("dotenv");
@@ -16,6 +17,7 @@ if (mongoose.connection) {
 app.use("/api/users", userRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/request", requestRoutes);
 
 const port = 5000;
 app.listen(port, () => {

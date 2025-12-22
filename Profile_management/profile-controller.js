@@ -1,7 +1,5 @@
-const { mongo, isValidObjectId } = require("mongoose");
 const userModel = require('../authentification/user-model');
 const jwt = require("jsonwebtoken");
-
 
 module.exports = {
 
@@ -44,7 +42,7 @@ module.exports = {
       updateProfilecontroller : async (req, res) => {
      try {
        const userId = req.user.id;
-       const { name, email, skills } = req.body;
+       const { name, email, service } = req.body;
        let profileImage;
    
        if (req.file) {
