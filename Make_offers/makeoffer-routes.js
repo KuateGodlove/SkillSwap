@@ -12,37 +12,27 @@ const {
   rejectOffer,
   withdrawOffer,
   sendMessage,
+  addNegotiation,
   getOfferStatistics
 } = require('./makeoffer-controller');
-router.use(checkAuth);
-// Create offer with file upload support
-router.post('/',  upload.array('attachments', 5), createOffer);
 
-// Get offers for a specific request (requester only)
+router.use(checkAuth);
+
+// ✅ Specific GET routes FIRST (before catch-all /:id)
+router.get('/my-offers', getMyOffers);
+router.get('/statistics', getOfferStatistics);
 router.get('/request/:requestId', getOffersByRequest);
 
-// Get user's own offers
-router.get('/my-offers', getMyOffers);
-
-// Get offer statistics
-router.get('/statistics', getOfferStatistics);
-
-// Get single offer
-router.get('/:id', getOfferById);
-
-// Update offer
-router.put('/:id',  updateOffer);
-
-// Accept offer
+// ✅ POST/PUT/PATCH/DELETE routes
+router.post('/', upload.array('attachments', 5), createOffer);
+router.put('/:id', updateOffer);
 router.post('/:id/accept', acceptOffer);
-
-// Reject offer
 router.post('/:id/reject', rejectOffer);
-
-// Withdraw offer
 router.post('/:id/withdraw', withdrawOffer);
-
-// Send message
+router.post('/:id/negotiate', addNegotiation);
 router.post('/:id/message', sendMessage);
+
+// ✅ Catch-all GET /:id LAST
+router.get('/:id', getOfferById);
 
 module.exports = router;

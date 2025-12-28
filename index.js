@@ -23,6 +23,13 @@ if (mongoose.connection) {
   console.log("MongoDB connection ok");
 }
 
+app.get('/api/debug/auth-test', (req, res) => {
+  console.log('=== AUTH DEBUG INFO ===');
+  console.log('Headers:', req.headers);
+  console.log('Authorization Header:', req.headers.authorization);
+  res.json({ message: 'Auth test endpoint reached' });
+});
+
 app.use("/api/users", userRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/profile", profileRoutes);

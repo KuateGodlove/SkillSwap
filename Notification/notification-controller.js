@@ -1,12 +1,12 @@
-const Notification = require('./notification-controller');
-const userModel = require("../authentification/user-model");
-const Request = require("../Service_request_management/request-model");
-const Offer = require('../Make_offers/makeoffer-model');
+const mongoose = require('mongoose');
+const Notification = require('./notification-model');
+const User = require("../authentification/user-model");
 
-// Utility: Create notification helper
+// Helper function to create notification
 const createNotification = async (data) => {
   try {
-    const notification = await Notification.createNotification(data);
+    const notification = new Notification(data);
+    await notification.save();
     return notification;
   } catch (error) {
     console.error('Error creating notification:', error);
@@ -25,37 +25,65 @@ exports.getNotifications = async (req, res) => {
       read,
       important,
       search,
-      dateRange,
       page = 1,
-      limit = 20
+      limit = 20,
+      sort = '-createdAt'
     } = req.query;
 
-    const filters = {
-      type: type !== 'all' ? type : undefined,
-      read,
-      important,
-      search,
-      dateRange
-    };
-
-    const result = await Notification.getUserNotifications(
-      userId,
-      filters,
-      parseInt(page),
-      parseInt(limit)
-    );
+    // Build query
+    const query = { userId, archived: false };
+    
+    // Apply filters
+    if (type && type !== 'all') {
+      query.type = type;
+    }
+    
+    if (read !== undefined) {
+      query.read = read === 'true';
+    }
+    
+    if (important !== undefined) {
+      query.important = important === 'true';
+    }
+    
+    // Search in title and message
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { message: { $regex: search, $options: 'i' } },
+        { senderName: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Get notifications
+    const notifications = await Notification.find(query)
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+    
+    // Get total count
+    const total = await Notification.countDocuments(query);
+    
+    // Format notifications with timeAgo
+    const formattedNotifications = notifications.map(notification => ({
+      ...notification,
+      timeAgo: getTimeAgo(notification.createdAt)
+    }));
 
     res.status(200).json({
       success: true,
       data: {
-        notifications: result.notifications,
+        notifications: formattedNotifications,
         pagination: {
-          total: result.total,
-          pages: result.pages,
-          page: result.page,
-          limit: result.limit
-        },
-        counts: result.counts
+          total,
+          pages: Math.ceil(total / limit),
+          page: parseInt(page),
+          limit: parseInt(limit)
+        }
       }
     });
   } catch (error) {
@@ -99,7 +127,10 @@ exports.getNotificationById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: notification
+      data: {
+        ...notification.toObject(),
+        timeAgo: getTimeAgo(notification.createdAt)
+      }
     });
   } catch (error) {
     console.error('Get notification error:', error);
@@ -133,9 +164,7 @@ exports.markAsRead = async (req, res) => {
       });
     }
 
-    notification.read = true;
-    notification.openedAt = new Date();
-    await notification.save();
+    await notification.markAsRead();
 
     res.status(200).json({
       success: true,
@@ -160,7 +189,7 @@ exports.markAllAsRead = async (req, res) => {
     const userId = req.user.id;
 
     const result = await Notification.updateMany(
-      { userId, read: false },
+      { userId, read: false, archived: false },
       { $set: { read: true, openedAt: new Date() } }
     );
 
@@ -217,41 +246,6 @@ exports.deleteNotification = async (req, res) => {
   }
 };
 
-// @desc    Delete multiple notifications
-// @route   DELETE /api/notifications
-// @access  Private
-exports.deleteMultipleNotifications = async (req, res) => {
-  try {
-    const { notificationIds } = req.body;
-    const userId = req.user.id;
-
-    if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide notification IDs to delete'
-      });
-    }
-
-    const result = await Notification.deleteMany({
-      _id: { $in: notificationIds },
-      userId
-    });
-
-    res.status(200).json({
-      success: true,
-      message: `Deleted ${result.deletedCount} notifications`,
-      data: { deletedCount: result.deletedCount }
-    });
-  } catch (error) {
-    console.error('Delete multiple notifications error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete notifications',
-      error: error.message
-    });
-  }
-};
-
 // @desc    Archive notification
 // @route   PUT /api/notifications/:id/archive
 // @access  Private
@@ -274,8 +268,7 @@ exports.archiveNotification = async (req, res) => {
       });
     }
 
-    notification.archived = true;
-    await notification.save();
+    await notification.archive();
 
     res.status(200).json({
       success: true,
@@ -292,195 +285,6 @@ exports.archiveNotification = async (req, res) => {
   }
 };
 
-// @desc    Get notification statistics
-// @route   GET /api/notifications/stats
-// @access  Private
-exports.getNotificationStats = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const stats = await Notification.aggregate([
-      { $match: { userId: mongoose.Types.ObjectId(userId), archived: false } },
-      { $group: {
-        _id: null,
-        total: { $sum: 1 },
-        unread: {
-          $sum: { $cond: [{ $eq: ['$read', false] }, 1, 0] }
-        },
-        important: {
-          $sum: { $cond: [{ $eq: ['$important', true] }, 1, 0] }
-        },
-        byType: {
-          $push: {
-            type: '$type',
-            read: '$read'
-          }
-        }
-      }}
-    ]);
-
-    // Calculate type-specific counts
-    const typeStats = {};
-    if (stats[0] && stats[0].byType) {
-      stats[0].byType.forEach(item => {
-        if (!typeStats[item.type]) {
-          typeStats[item.type] = { total: 0, unread: 0 };
-        }
-        typeStats[item.type].total += 1;
-        if (!item.read) {
-          typeStats[item.type].unread += 1;
-        }
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        total: stats[0]?.total || 0,
-        unread: stats[0]?.unread || 0,
-        important: stats[0]?.important || 0,
-        byType: typeStats,
-        readRate: stats[0] ? 
-          ((stats[0].total - stats[0].unread) / stats[0].total * 100).toFixed(1) : 0
-      }
-    });
-  } catch (error) {
-    console.error('Get stats error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch notification statistics',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Track action click
-// @route   POST /api/notifications/:id/action
-// @access  Private
-exports.trackAction = async (req, res) => {
-  try {
-    const { action } = req.body;
-    const notification = await Notification.findById(req.params.id);
-
-    if (!notification) {
-      return res.status(404).json({
-        success: false,
-        message: 'Notification not found'
-      });
-    }
-
-    // Check ownership
-    if (notification.userId.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to track action for this notification'
-      });
-    }
-
-    // Record the action click
-    notification.clickedActions.push({
-      action,
-      clickedAt: new Date()
-    });
-
-    // Mark as read if not already
-    if (!notification.read) {
-      notification.read = true;
-      notification.openedAt = new Date();
-    }
-
-    await notification.save();
-
-    res.status(200).json({
-      success: true,
-      message: 'Action tracked successfully'
-    });
-  } catch (error) {
-    console.error('Track action error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to track action',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Create notification (for internal use - e.g., from other controllers)
-// @route   POST /api/notifications/create
-// @access  Private (Admin/Internal)
-exports.createNotificationForUser = async (req, res) => {
-  try {
-    const { userId, type, title, message, metadata, important, senderId } = req.body;
-
-    // Get sender info if provided
-    let senderName = 'System';
-    let senderPhoto = '';
-    let senderType = 'system';
-
-    if (senderId) {
-      const sender = await userModel.findById(senderId).select('firstName lastName profilePhoto');
-      if (sender) {
-        senderName = `${sender.firstName} ${sender.lastName}`;
-        senderPhoto = sender.profilePhoto;
-        senderType = 'user';
-      }
-    }
-
-    const notificationData = {
-      userId,
-      type,
-      title,
-      message,
-      metadata,
-      important: important || false,
-      senderId: senderId || null,
-      senderName,
-      senderPhoto,
-      senderType,
-      read: false,
-      archived: false
-    };
-
-    // Add actions based on type
-    switch (type) {
-      case 'offer':
-        notificationData.actions = [
-          { label: 'View Offer', action: 'view', link: `/offers/${metadata.offerId}`, method: 'GET' },
-          { label: 'Accept', action: 'accept', link: `/api/offers/${metadata.offerId}/accept`, method: 'PUT' },
-          { label: 'Decline', action: 'decline', link: `/api/offers/${metadata.offerId}/decline`, method: 'PUT' }
-        ];
-        break;
-      case 'message':
-        notificationData.actions = [
-          { label: 'Reply', action: 'reply', link: `/messages/${metadata.conversationId}`, method: 'GET' },
-          { label: 'View', action: 'view', link: `/messages/${metadata.conversationId}`, method: 'GET' }
-        ];
-        break;
-      case 'request':
-        notificationData.actions = [
-          { label: 'View Request', action: 'view', link: `/requests/${metadata.requestId}`, method: 'GET' },
-          { label: 'Make Offer', action: 'offer', link: `/offers/create/${metadata.requestId}`, method: 'GET' }
-        ];
-        break;
-    }
-
-    const notification = await createNotification(notificationData);
-
-    res.status(201).json({
-      success: true,
-      message: 'Notification created successfully',
-      data: notification
-    });
-  } catch (error) {
-    console.error('Create notification error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create notification',
-      error: error.message
-    });
-  }
-};
-
 // @desc    Get unread count (for badge)
 // @route   GET /api/notifications/unread-count
 // @access  Private
@@ -488,11 +292,7 @@ exports.getUnreadCount = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const count = await Notification.countDocuments({
-      userId,
-      read: false,
-      archived: false
-    });
+    const count = await Notification.getUnreadCount(userId);
 
     res.status(200).json({
       success: true,
@@ -514,7 +314,7 @@ exports.getUnreadCount = async (req, res) => {
 exports.clearAllNotifications = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { archive } = req.query; // Option to archive instead of delete
+    const { archive } = req.query;
 
     if (archive === 'true') {
       // Archive all notifications
@@ -547,3 +347,249 @@ exports.clearAllNotifications = async (req, res) => {
     });
   }
 };
+
+// @desc    Create notification for offer received
+// @route   POST /api/notifications/offer-received
+// @access  Private
+exports.createOfferReceivedNotification = async (req, res) => {
+  try {
+    const { userId, senderId, requestId, offerId, budget } = req.body;
+
+    // Get sender info
+    const sender = await User.findById(senderId);
+    if (!sender) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sender not found'
+      });
+    }
+
+    const notification = await createNotification({
+      userId,
+      type: 'offer_received',
+      title: 'New Offer Received',
+      message: `${sender.firstName} ${sender.lastName} has sent you an offer with a budget of $${budget}`,
+      metadata: {
+        requestId,
+        offerId,
+        amount: budget,
+        senderId
+      },
+      senderId,
+      senderName: `${sender.firstName} ${sender.lastName}`,
+      senderPhoto: sender.profilePhoto || '',
+      important: true,
+      actions: [
+        {
+          label: 'View Offer',
+          action: 'view_offer',
+          link: `/offers/${offerId}`,
+          method: 'GET'
+        },
+        {
+          label: 'Accept',
+          action: 'accept_offer',
+          link: `/api/offers/${offerId}/accept`,
+          method: 'PUT'
+        },
+        {
+          label: 'Decline',
+          action: 'decline_offer',
+          link: `/api/offers/${offerId}/decline`,
+          method: 'PUT'
+        }
+      ]
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Notification created successfully',
+      data: notification
+    });
+  } catch (error) {
+    console.error('Create offer notification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create notification',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Create notification for message received
+// @route   POST /api/notifications/message-received
+// @access  Private
+exports.createMessageReceivedNotification = async (req, res) => {
+  try {
+    const { userId, senderId, conversationId, messagePreview } = req.body;
+
+    const sender = await User.findById(senderId);
+    if (!sender) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sender not found'
+      });
+    }
+
+    const notification = await createNotification({
+      userId,
+      type: 'message_received',
+      title: 'New Message',
+      message: `${sender.firstName} ${sender.lastName} sent you a message`,
+      metadata: {
+        conversationId,
+        senderId,
+        messagePreview
+      },
+      senderId,
+      senderName: `${sender.firstName} ${sender.lastName}`,
+      senderPhoto: sender.profilePhoto || '',
+      important: true,
+      actions: [
+        {
+          label: 'Reply',
+          action: 'reply',
+          link: `/messages/${conversationId}`,
+          method: 'GET'
+        }
+      ]
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Notification created successfully',
+      data: notification
+    });
+  } catch (error) {
+    console.error('Create message notification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create notification',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Create notification for payment received
+// @route   POST /api/notifications/payment-received
+// @access  Private
+exports.createPaymentReceivedNotification = async (req, res) => {
+  try {
+    const { userId, amount, transactionId } = req.body;
+
+    const notification = await createNotification({
+      userId,
+      type: 'payment_received',
+      title: 'Payment Received',
+      message: `Payment of $${amount} has been successfully processed`,
+      metadata: {
+        amount,
+        transactionId
+      },
+      important: true,
+      actions: [
+        {
+          label: 'View Details',
+          action: 'view_transaction',
+          link: `/transactions/${transactionId}`,
+          method: 'GET'
+        }
+      ]
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Notification created successfully',
+      data: notification
+    });
+  } catch (error) {
+    console.error('Create payment notification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create notification',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Create notification for request accepted
+// @route   POST /api/notifications/request-accepted
+// @access  Private
+exports.createRequestAcceptedNotification = async (req, res) => {
+  try {
+    const { userId, acceptorId, requestId, requestTitle } = req.body;
+
+    const acceptor = await User.findById(acceptorId);
+    if (!acceptor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Acceptor not found'
+      });
+    }
+
+    const notification = await createNotification({
+      userId,
+      type: 'request_accepted',
+      title: 'Request Accepted',
+      message: `Your request "${requestTitle}" has been accepted`,
+      metadata: {
+        requestId,
+        acceptorId,
+        requestTitle
+      },
+      senderId: acceptorId,
+      senderName: `${acceptor.firstName} ${acceptor.lastName}`,
+      senderPhoto: acceptor.profilePhoto || '',
+      important: true,
+      actions: [
+        {
+          label: 'View Request',
+          action: 'view_request',
+          link: `/requests/${requestId}`,
+          method: 'GET'
+        },
+        {
+          label: 'Message',
+          action: 'message',
+          link: `/messages/compose?to=${acceptorId}`,
+          method: 'GET'
+        }
+      ]
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Notification created successfully',
+      data: notification
+    });
+  } catch (error) {
+    console.error('Create request accepted notification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create notification',
+      error: error.message
+    });
+  }
+};
+
+// Helper function to calculate time ago
+function getTimeAgo(date) {
+  const now = new Date();
+  const diffMs = now - new Date(date);
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMinutes < 60) {
+    return diffMinutes <= 1 ? 'just now' : `${diffMinutes}m ago`;
+  } else if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  } else if (diffDays < 7) {
+    return `${diffDays}d ago`;
+  } else {
+    return new Date(date).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  }
+}

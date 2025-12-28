@@ -1,15 +1,84 @@
+const mongoose = require('mongoose');
 const Offer = require('../Make_offers/makeoffer-model');
 const Request = require("../Service_request_management/request-model");
-const userModel = require("../authentification/user-model");
-const Notification = require('../Notification/notification-controller');
+const User = require("../authentification/user-model");
+const NotificationService = require('../Notification/notification-service'); // Updated import
+
+// Helper function for notifications - Updated to use NotificationService
+const notifyNewOffer = async (offer, request) => {
+  try {
+    // Get requester user
+    const requester = await User.findById(request.requesterId);
+    
+    if (!requester) {
+      console.log('Requester not found for notification');
+      return;
+    }
+    
+    // Get provider user
+    const provider = await User.findById(offer.providerId);
+    
+    // Create notification using NotificationService
+    await NotificationService.createOfferReceivedNotification({
+      userId: request.requesterId, // Notify the request owner
+      senderId: offer.providerId,  // The one making the offer
+      requestId: request._id,
+      offerId: offer._id,
+      budget: offer.proposedBudget,
+      senderName: provider ? `${provider.firstName} ${provider.lastName}` : 'A user'
+    });
+    
+    console.log('📢 Notification sent for new offer');
+  } catch (notifError) {
+    console.error('Failed to send notification:', notifError);
+  }
+};
+
+const notifyOfferAccepted = async (offer, request) => {
+  try {
+    // Get provider user
+    const provider = await User.findById(offer.providerId);
+    
+    if (!provider) {
+      console.log('Provider not found for notification');
+      return;
+    }
+    
+    // Get requester user
+    const requester = await User.findById(request.requesterId);
+    
+    // Create notification using NotificationService
+    await NotificationService.createRequestAcceptedNotification({
+      userId: offer.providerId, // Notify the provider
+      acceptorId: request.requesterId, // The one who accepted
+      requestId: request._id,
+      requestTitle: request.title,
+      acceptorName: requester ? `${requester.firstName} ${requester.lastName}` : 'Requester'
+    });
+    
+    console.log('📢 Notification sent for accepted offer');
+  } catch (notifError) {
+    console.error('Failed to send notification:', notifError);
+  }
+};
 
 // @desc    Create a new offer
 // @route   POST /api/offers
 // @access  Private
 exports.createOffer = async (req, res) => {
   try {
+    console.log('📩 POST /api/offers called');
+    
+    // Check authentication
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
     const userId = req.user.id;
-    const user = await userModel.findById(userId);
+    const user = await User.findById(userId);
     
     if (!user) {
       return res.status(404).json({
@@ -18,7 +87,25 @@ exports.createOffer = async (req, res) => {
       });
     }
 
-    const { requestId, proposedBudget, estimatedTime, coverLetter, pricingStrategy } = req.body;
+    const { 
+      requestId, 
+      proposedBudget, 
+      estimatedTime, 
+      coverLetter, 
+      pricingStrategy,
+      timeUnit = 'days',
+      hourlyRate,
+      milestoneDetails,
+      isNegotiable = true
+    } = req.body;
+    
+    // Validate required fields
+    if (!requestId || !proposedBudget || !coverLetter || !estimatedTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: requestId, proposedBudget, coverLetter, estimatedTime'
+      });
+    }
     
     // Check if request exists
     const request = await Request.findById(requestId);
@@ -26,6 +113,14 @@ exports.createOffer = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Request not found'
+      });
+    }
+    
+    // Prevent self-offers
+    if (request.requesterId.toString() === userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot make an offer on your own request'
       });
     }
     
@@ -54,7 +149,7 @@ exports.createOffer = async (req, res) => {
       }));
     }
     
-    // Create offer
+    // Prepare offer data
     const offerData = {
       requestId,
       providerId: userId,
@@ -65,16 +160,73 @@ exports.createOffer = async (req, res) => {
       proposedBudget: parseFloat(proposedBudget),
       originalBudget: request.budget,
       estimatedTime,
+      timeUnit,
       coverLetter,
-      pricingStrategy,
-      attachments,
-      status: 'pending'
+      pricingStrategy: pricingStrategy || 'fixed',
+      isNegotiable,
+      attachments
     };
     
-    const offer = await Offer.create(offerData);
+    // Add pricing-specific fields
+    if (pricingStrategy === 'hourly' && hourlyRate) {
+      offerData.hourlyRate = parseFloat(hourlyRate);
+    }
     
-    // Send notification to requester
-    await Notification.notifyNewOffer(offer, request);
+    if (pricingStrategy === 'milestone' && milestoneDetails) {
+      offerData.milestoneDetails = milestoneDetails;
+    }
+    
+    // Create offer using the model's static method
+    const offer = await Offer.createOffer(offerData);
+    
+    // Send notification for new offer
+    await notifyNewOffer(offer, request);
+    
+    // Also send skill match notification to the requester
+    try {
+      // Get provider skills to show in notification
+      const providerSkills = user.skills || [];
+      const matchingSkills = providerSkills.filter(skill => 
+        request.skillsRequired?.includes(skill)
+      );
+      
+      if (matchingSkills.length > 0) {
+        // Create a more detailed notification
+        await NotificationService.createNotification({
+          userId: request.requesterId,
+          type: 'skill_match',
+          title: 'New Offer with Matching Skills',
+          message: `${user.firstName} ${user.lastName} sent you an offer with ${matchingSkills.length} matching skills: ${matchingSkills.join(', ')}`,
+          metadata: {
+            requestId: request._id,
+            offerId: offer._id,
+            matchingSkills,
+            budget: offer.proposedBudget
+          },
+          senderId: userId,
+          senderName: `${user.firstName} ${user.lastName}`,
+          senderPhoto: user.profilePhoto || '',
+          important: true,
+          actions: [
+            {
+              label: 'View Offer',
+              action: 'view_offer',
+              link: `/offers/${offer._id}`,
+              method: 'GET'
+            },
+            {
+              label: 'Respond',
+              action: 'respond',
+              link: `/offers/${offer._id}`,
+              method: 'GET'
+            }
+          ]
+        });
+      }
+    } catch (skillNotifError) {
+      console.error('Skill match notification error:', skillNotifError);
+      // Don't fail the whole request if skill notification fails
+    }
     
     res.status(201).json({
       success: true,
@@ -82,7 +234,7 @@ exports.createOffer = async (req, res) => {
       data: offer
     });
   } catch (error) {
-    console.error('Create offer error:', error);
+    console.error('❌ Create offer error:', error);
     
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(val => val.message);
@@ -101,202 +253,15 @@ exports.createOffer = async (req, res) => {
   }
 };
 
-// @desc    Get offers for a request
-// @route   GET /api/offers/request/:requestId
-// @access  Private (Requester only)
-exports.getOffersByRequest = async (req, res) => {
-  try {
-    const requestId = req.params.requestId;
-    const userId = req.user.id;
-    
-    // Verify request ownership
-    const request = await Request.findById(requestId);
-    if (!request) {
-      return res.status(404).json({
-        success: false,
-        message: 'Request not found'
-      });
-    }
-    
-    if (request.requesterId.toString() !== userId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to view offers for this request'
-      });
-    }
-    
-    const offers = await Offer.find({ requestId })
-      .sort({ createdAt: -1 })
-      .populate('providerId', 'firstName lastName profilePhoto rating reviewsCount');
-    
-    res.status(200).json({
-      success: true,
-      count: offers.length,
-      data: offers
-    });
-  } catch (error) {
-    console.error('Get offers error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch offers',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Get user's offers
-// @route   GET /api/offers/my-offers
-// @access  Private
-exports.getMyOffers = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { status, page = 1, limit = 10 } = req.query;
-    
-    const query = { providerId: userId };
-    if (status && status !== 'all') {
-      query.status = status;
-    }
-    
-    const skip = (page - 1) * limit;
-    
-    const offers = await Offer.find(query)
-      .populate('requestId', 'title budget status')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-    
-    const total = await Offer.countDocuments(query);
-    
-    res.status(200).json({
-      success: true,
-      count: total,
-      totalPages: Math.ceil(total / limit),
-      currentPage: parseInt(page),
-      data: offers
-    });
-  } catch (error) {
-    console.error('Get my offers error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch your offers',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Get single offer
-// @route   GET /api/offers/:id
-// @access  Private
-exports.getOfferById = async (req, res) => {
-  try {
-    const offer = await Offer.findById(req.params.id)
-      .populate('requestId', 'title description budget status requesterName')
-      .populate('providerId', 'firstName lastName profilePhoto rating skills bio');
-    
-    if (!offer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Offer not found'
-      });
-    }
-    
-    // Increment views
-    offer.views += 1;
-    await offer.save();
-    
-    res.status(200).json({
-      success: true,
-      data: offer
-    });
-  } catch (error) {
-    console.error('Get offer error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch offer',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Update offer
-// @route   PUT /api/offers/:id
-// @access  Private (Provider only)
-exports.updateOffer = async (req, res) => {
-  try {
-    const offer = await Offer.findById(req.params.id);
-    
-    if (!offer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Offer not found'
-      });
-    }
-    
-    // Check ownership
-    if (offer.providerId.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this offer'
-      });
-    }
-    
-    // Check if offer can be updated
-    if (offer.status !== 'pending') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot update offer that is not pending'
-      });
-    }
-    
-    // Update offer
-    const updateData = {
-      ...req.body,
-      updatedAt: Date.now()
-    };
-    
-    // Handle budget conversion
-    if (req.body.proposedBudget) {
-      updateData.proposedBudget = parseFloat(req.body.proposedBudget);
-    }
-    
-    const updatedOffer = await Offer.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
-    
-    res.status(200).json({
-      success: true,
-      message: 'Offer updated successfully',
-      data: updatedOffer
-    });
-  } catch (error) {
-    console.error('Update offer error:', error);
-    
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(val => val.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Validation error',
-        errors: messages
-      });
-    }
-    
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update offer',
-      error: error.message
-    });
-  }
-};
-
 // @desc    Accept offer
 // @route   POST /api/offers/:id/accept
 // @access  Private (Requester only)
 exports.acceptOffer = async (req, res) => {
   try {
-    const offer = await Offer.findById(req.params.id)
-      .populate('requestId');
+    const offerId = req.params.id;
+    const userId = req.user.id;
+    
+    const offer = await Offer.findById(offerId).populate('requestId');
     
     if (!offer) {
       return res.status(404).json({
@@ -307,7 +272,7 @@ exports.acceptOffer = async (req, res) => {
     
     // Check if user is the requester
     const request = offer.requestId;
-    if (request.requesterId.toString() !== req.user.id) {
+    if (!request || request.requesterId.toString() !== userId) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to accept this offer'
@@ -322,28 +287,79 @@ exports.acceptOffer = async (req, res) => {
       });
     }
     
-    // Update offer status
-    offer.status = 'accepted';
-    await offer.save();
+    // Start transaction (if using MongoDB transactions)
+    const session = await mongoose.startSession();
     
-    // Update request status
-    request.status = 'in-progress';
-    request.selectedOffer = offer._id;
-    request.providerId = offer.providerId;
-    await request.save();
+    try {
+      await session.withTransaction(async () => {
+        // Update offer status
+        offer.status = 'accepted';
+        offer.acceptedAt = new Date();
+        await offer.save({ session });
+        
+        // Update request status
+        request.status = 'in-progress';
+        request.selectedOffer = offer._id;
+        request.providerId = offer.providerId;
+        request.acceptedBudget = offer.proposedBudget;
+        await request.save({ session });
+        
+        // Reject all other offers for this request
+        await Offer.updateMany(
+          {
+            requestId: request._id,
+            _id: { $ne: offer._id },
+            status: 'pending'
+          },
+          { $set: { status: 'rejected' } },
+          { session }
+        );
+      });
+    } finally {
+      session.endSession();
+    }
     
-    // Reject all other offers for this request
-    await Offer.updateMany(
-      {
-        requestId: request._id,
-        _id: { $ne: offer._id },
-        status: 'pending'
-      },
-      { $set: { status: 'rejected' } }
-    );
+    // Send notification to provider that their offer was accepted
+    await notifyOfferAccepted(offer, request);
     
-    // Send notification to provider
-    await Notification.notifyOfferAccepted(offer, request);
+    // Also notify the requester (optional, but good for confirmation)
+    try {
+      const requester = await User.findById(userId);
+      const provider = await User.findById(offer.providerId);
+      
+      if (requester && provider) {
+        await NotificationService.createNotification({
+          userId: userId, // Notify the requester themselves
+          type: 'request_accepted',
+          title: 'Offer Accepted Successfully',
+          message: `You have accepted ${provider.firstName} ${provider.lastName}'s offer for "${request.title}"`,
+          metadata: {
+            requestId: request._id,
+            offerId: offer._id,
+            providerId: offer.providerId,
+            budget: offer.proposedBudget
+          },
+          important: true,
+          actions: [
+            {
+              label: 'View Request',
+              action: 'view_request',
+              link: `/requests/${request._id}`,
+              method: 'GET'
+            },
+            {
+              label: 'Message Provider',
+              action: 'message',
+              link: `/messages/compose?to=${offer.providerId}`,
+              method: 'GET'
+            }
+          ]
+        });
+      }
+    } catch (requesterNotifError) {
+      console.error('Requester notification error:', requesterNotifError);
+      // Don't fail the whole request if requester notification fails
+    }
     
     res.status(200).json({
       success: true,
@@ -368,8 +384,10 @@ exports.acceptOffer = async (req, res) => {
 // @access  Private (Requester only)
 exports.rejectOffer = async (req, res) => {
   try {
-    const offer = await Offer.findById(req.params.id)
-      .populate('requestId');
+    const offerId = req.params.id;
+    const userId = req.user.id;
+    
+    const offer = await Offer.findById(offerId).populate('requestId');
     
     if (!offer) {
       return res.status(404).json({
@@ -380,7 +398,7 @@ exports.rejectOffer = async (req, res) => {
     
     // Check if user is the requester
     const request = offer.requestId;
-    if (request.requesterId.toString() !== req.user.id) {
+    if (!request || request.requesterId.toString() !== userId) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to reject this offer'
@@ -397,11 +415,62 @@ exports.rejectOffer = async (req, res) => {
     
     // Update offer status
     offer.status = 'rejected';
+    offer.rejectedAt = new Date();
     await offer.save();
+    
+    // Optional: Add rejection reason if provided
+    if (req.body.reason) {
+      const rejectionReason = req.body.reason;
+      if (!offer.messages) {
+        offer.messages = [];
+      }
+      
+      offer.messages.push({
+        senderId: userId,
+        message: `Offer rejected. Reason: ${rejectionReason}`,
+        isSystemMessage: true,
+        sentAt: new Date()
+      });
+      await offer.save();
+      
+      // Send notification to provider about rejection
+      try {
+        const requester = await User.findById(userId);
+        
+        await NotificationService.createNotification({
+          userId: offer.providerId,
+          type: 'offer_declined',
+          title: 'Offer Declined',
+          message: `Your offer for "${request.title}" was declined. Reason: ${rejectionReason}`,
+          metadata: {
+            requestId: request._id,
+            offerId: offer._id,
+            rejectionReason
+          },
+          important: true,
+          actions: [
+            {
+              label: 'View Offer',
+              action: 'view_offer',
+              link: `/offers/${offer._id}`,
+              method: 'GET'
+            },
+            {
+              label: 'Find Other Requests',
+              action: 'browse_requests',
+              link: `/requests`,
+              method: 'GET'
+            }
+          ]
+        });
+      } catch (notifError) {
+        console.error('Rejection notification error:', notifError);
+      }
+    }
     
     res.status(200).json({
       success: true,
-      message: 'Offer rejected',
+      message: 'Offer rejected successfully',
       data: offer
     });
   } catch (error) {
@@ -419,7 +488,10 @@ exports.rejectOffer = async (req, res) => {
 // @access  Private (Provider only)
 exports.withdrawOffer = async (req, res) => {
   try {
-    const offer = await Offer.findById(req.params.id);
+    const offerId = req.params.id;
+    const userId = req.user.id;
+    
+    const offer = await Offer.findById(offerId).populate('requestId');
     
     if (!offer) {
       return res.status(404).json({
@@ -429,7 +501,7 @@ exports.withdrawOffer = async (req, res) => {
     }
     
     // Check ownership
-    if (offer.providerId.toString() !== req.user.id) {
+    if (offer.providerId.toString() !== userId) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to withdraw this offer'
@@ -446,7 +518,47 @@ exports.withdrawOffer = async (req, res) => {
     
     // Update offer status
     offer.status = 'withdrawn';
+    offer.withdrawnAt = new Date();
     await offer.save();
+    
+    // Send notification to requester
+    try {
+      const request = offer.requestId;
+      const provider = await User.findById(userId);
+      
+      if (request && provider) {
+        await NotificationService.createNotification({
+          userId: request.requesterId,
+          type: 'offer_withdrawn',
+          title: 'Offer Withdrawn',
+          message: `${provider.firstName} ${provider.lastName} has withdrawn their offer for "${request.title}"`,
+          metadata: {
+            requestId: request._id,
+            offerId: offer._id,
+            providerId: userId
+          },
+          senderId: userId,
+          senderName: `${provider.firstName} ${provider.lastName}`,
+          senderPhoto: provider.profilePhoto || '',
+          actions: [
+            {
+              label: 'View Request',
+              action: 'view_request',
+              link: `/requests/${request._id}`,
+              method: 'GET'
+            },
+            {
+              label: 'Message Provider',
+              action: 'message',
+              link: `/messages/compose?to=${userId}`,
+              method: 'GET'
+            }
+          ]
+        });
+      }
+    } catch (notifError) {
+      console.error('Withdrawal notification error:', notifError);
+    }
     
     res.status(200).json({
       success: true,
@@ -469,7 +581,17 @@ exports.withdrawOffer = async (req, res) => {
 exports.sendMessage = async (req, res) => {
   try {
     const { message } = req.body;
-    const offer = await Offer.findById(req.params.id);
+    const offerId = req.params.id;
+    const userId = req.user.id;
+    
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Message cannot be empty'
+      });
+    }
+    
+    const offer = await Offer.findById(offerId);
     
     if (!offer) {
       return res.status(404).json({
@@ -478,24 +600,55 @@ exports.sendMessage = async (req, res) => {
       });
     }
     
-    // Check if messages array exists
+    // Check if user is authorized (either requester or provider)
+    const request = await Request.findById(offer.requestId);
+    const isRequester = request && request.requesterId.toString() === userId;
+    const isProvider = offer.providerId.toString() === userId;
+    
+    if (!isRequester && !isProvider) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to message this offer'
+      });
+    }
+    
+    // Add message
+    const newMessage = {
+      senderId: userId,
+      message: message.trim(),
+      sentAt: new Date()
+    };
+    
+    // Initialize messages array if it doesn't exist
     if (!offer.messages) {
       offer.messages = [];
     }
     
-    // Add message
-    offer.messages.push({
-      senderId: req.user.id,
-      message,
-      sentAt: new Date()
-    });
-    
+    offer.messages.push(newMessage);
     await offer.save();
+    
+    // Send notification to the other party
+    try {
+      const recipientId = isRequester ? offer.providerId : request.requesterId;
+      const sender = await User.findById(userId);
+      const recipient = await User.findById(recipientId);
+      
+      if (sender && recipient) {
+        await NotificationService.createMessageReceivedNotification({
+          userId: recipientId,
+          senderId: userId,
+          conversationId: `offer_${offer._id}`,
+          messagePreview: message.trim().substring(0, 100)
+        });
+      }
+    } catch (notifError) {
+      console.error('Message notification error:', notifError);
+    }
     
     res.status(200).json({
       success: true,
       message: 'Message sent successfully',
-      data: offer.messages[offer.messages.length - 1]
+      data: newMessage
     });
   } catch (error) {
     console.error('Send message error:', error);
@@ -507,38 +660,73 @@ exports.sendMessage = async (req, res) => {
   }
 };
 
-// @desc    Get offer statistics
-// @route   GET /api/offers/statistics
+// ... (rest of the controller remains the same)
+
+// @desc    Check if user can make an offer
+// @route   GET /api/offers/check/:requestId
 // @access  Private
-exports.getOfferStatistics = async (req, res) => {
+exports.checkOfferEligibility = async (req, res) => {
   try {
+    const requestId = req.params.requestId;
     const userId = req.user.id;
     
-    const statistics = await Offer.aggregate([
-      { $match: { providerId: userId } },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 },
-          totalBudget: { $sum: '$proposedBudget' }
-        }
-      }
-    ]);
+    const request = await Request.findById(requestId);
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: 'Request not found'
+      });
+    }
     
-    const totalOffers = await Offer.countDocuments({ providerId: userId });
+    // Check if user is the requester
+    if (request.requesterId.toString() === userId) {
+      return res.status(200).json({
+        success: true,
+        eligible: false,
+        reason: 'You cannot make an offer on your own request'
+      });
+    }
     
+    // Check if request is still open
+    if (request.status !== 'open') {
+      return res.status(200).json({
+        success: true,
+        eligible: false,
+        reason: 'This request is no longer accepting offers'
+      });
+    }
+    
+    // Check if user already has a pending/accepted offer
+    const existingOffer = await Offer.findOne({
+      requestId,
+      providerId: userId,
+      status: { $in: ['pending', 'accepted'] }
+    });
+    
+    if (existingOffer) {
+      return res.status(200).json({
+        success: true,
+        eligible: false,
+        reason: 'You have already submitted an offer for this request',
+        existingOfferId: existingOffer._id
+      });
+    }
+    
+    // All checks passed
     res.status(200).json({
       success: true,
-      data: {
-        statistics,
-        totalOffers
+      eligible: true,
+      requestDetails: {
+        title: request.title,
+        budget: request.budget,
+        deadline: request.deadline
       }
     });
   } catch (error) {
-    console.error('Get statistics error:', error);
+    console.error('Check eligibility error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch statistics',
+      message: 'Failed to check eligibility',
       error: error.message
     });
   }
