@@ -1,193 +1,198 @@
 const mongoose = require('mongoose');
 
 const offerSchema = new mongoose.Schema({
-  // Request reference
   requestId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Request',
     required: true
   },
   
-  // Provider information
   providerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
+  
   providerName: {
     type: String,
     required: true
   },
-  providerEmail: String,
+  
+  providerEmail: {
+    type: String,
+    required: true
+  },
+  
   providerPhoto: String,
+  
   providerRating: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0,
+    max: 5
   },
   
-  // Offer details
-  proposedBudget: {
-    type: Number,
-    required: [true, 'Proposed budget is required'],
-    min: [0, 'Budget cannot be negative']
+  // Skills the provider offers
+  skillsOffered: {
+    type: [String],
+    required: true,
+    validate: {
+      validator: function(v) {
+        return v && v.length > 0;
+      },
+      message: 'At least one skill must be offered'
+    }
   },
-  originalBudget: Number, // Store original request budget for comparison
   
-  // Timeline
+  // Time commitment (NO MONEY)
   estimatedTime: {
-    type: String,
-    required: [true, 'Estimated time is required']
+    type: Number,
+    required: true
   },
+  
   timeUnit: {
     type: String,
-    enum: ['hours', 'days', 'weeks', 'months'],
+    enum: ['hours', 'days', 'weeks'],
+    required: true,
     default: 'days'
   },
   
-  // Proposal
-  coverLetter: {
-    type: String,
-    required: [true, 'Cover letter is required'],
-    minlength: [50, 'Cover letter must be at least 50 characters'],
-    maxlength: [2000, 'Cover letter cannot exceed 2000 characters']
+  // Estimated completion date
+  estimatedCompletion: {
+    type: Date,
+    required: true
   },
   
-  // Pricing strategy
-  pricingStrategy: {
+  // Cover letter/proposal
+  proposalMessage: {
     type: String,
-    enum: ['fixed', 'hourly', 'milestone'],
-    default: 'fixed'
+    required: true,
+    maxlength: 2000
   },
-  milestoneDetails: String,
-  hourlyRate: Number,
   
-  // Attachments
+  // Availability details
+  availability: {
+    flexible: {
+      type: Boolean,
+      default: false
+    },
+    days: [{
+      type: String,
+      enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    }],
+    timeSlots: [{
+      type: String,
+      enum: ['morning', 'afternoon', 'evening', 'night']
+    }],
+    timezone: String
+  },
+  
+  // What provider expects in return (for negotiation)
+  isNegotiable: {
+    type: Boolean,
+    default: true
+  },
+  
+  skillsExpected: {
+    type: [String], // Skills the provider wants to learn or exchange for
+    default: []
+  },
+  
+  // Portfolio/reference files
   attachments: [{
     fileName: String,
     fileUrl: String,
     fileType: String,
-    fileSize: Number,
-    uploadedAt: {
-      type: Date,
-      default: Date.now
-    }
+    fileSize: Number
   }],
   
-  // Status
-  status: {
-    type: String,
-    enum: ['pending', 'accepted', 'rejected', 'withdrawn', 'expired'],
-    default: 'pending'
-  },
-  
-  // Communication
+  // Communication/Messages
   messages: [{
     senderId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+      ref: 'User',
+      required: true
     },
-    message: String,
+    senderName: String,
+    message: {
+      type: String,
+      required: true
+    },
     sentAt: {
       type: Date,
       default: Date.now
     },
-    read: {
+    isSystemMessage: {
       type: Boolean,
       default: false
     }
   }],
   
-  // Negotiation
-  isNegotiable: {
-    type: Boolean,
-    default: true
-  },
-  revisions: [{
-    budget: Number,
-    timeline: String,
-    message: String,
-    proposedAt: Date,
-    status: {
+  // Negotiation history
+  negotiations: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    userType: {
       type: String,
-      enum: ['pending', 'accepted', 'rejected']
+      enum: ['requester', 'provider']
+    },
+    skillsOffered: [String],
+    proposedTimeline: Object,
+    message: String,
+    createdAt: {
+      type: Date,
+      default: Date.now
     }
   }],
   
-  // Analytics
-  views: {
-    type: Number,
-    default: 0
+  // Offer status
+  status: {
+    type: String,
+    enum: ['pending', 'accepted', 'rejected', 'withdrawn', 'completed', 'cancelled'],
+    default: 'pending'
   },
   
-  // Timestamps
-  createdAt: {
-    type: Date,
-    default: Date.now
+  // Status timestamps
+  acceptedAt: Date,
+  rejectedAt: Date,
+  withdrawnAt: Date,
+  completedAt: Date,
+  
+  // Ratings & feedback
+  requesterRating: {
+    type: Number,
+    min: 1,
+    max: 5
   },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+  
+  providerRating: {
+    type: Number,
+    min: 1,
+    max: 5
   },
-  expiresAt: {
-    type: Date,
-    default: function() {
-      const date = new Date(this.createdAt);
-      date.setDate(date.getDate() + 7); // Offers expire in 7 days
-      return date;
-    }
-  }
+  
+  requesterFeedback: String,
+  providerFeedback: String
 }, {
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  timestamps: true
 });
 
-// Indexes
+// Indexes for better query performance
 offerSchema.index({ requestId: 1, status: 1 });
 offerSchema.index({ providerId: 1, status: 1 });
-offerSchema.index({ createdAt: -1 });
-offerSchema.index({ expiresAt: 1 });
+offerSchema.index({ status: 1, createdAt: -1 });
+offerSchema.index({ requestId: 1, providerId: 1 });
+offerSchema.index({ skillsOffered: 1 });
 
-// Virtual for time remaining
-offerSchema.virtual('timeRemaining').get(function() {
-  const now = new Date();
-  const expires = new Date(this.expiresAt);
-  const diffMs = expires - now;
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  return diffDays > 0 ? diffDays : 0;
+// Virtual for time display
+offerSchema.virtual('estimatedTimeDisplay').get(function() {
+  return `${this.estimatedTime} ${this.timeUnit}`;
 });
 
-// Virtual for savings percentage
-offerSchema.virtual('savingsPercentage').get(function() {
-  if (!this.originalBudget) return 0;
-  const savings = ((this.originalBudget - this.proposedBudget) / this.originalBudget) * 100;
-  return Math.round(savings * 100) / 100;
-});
-
-// Middleware
-offerSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-// Static method to create offer
-offerSchema.statics.createOffer = async function(data) {
-  try {
-    const offer = new this(data);
-    await offer.save();
-    
-    // Update request's offers count
-    const Request = mongoose.model('Request');
-    await Request.findByIdAndUpdate(data.requestId, {
-      $inc: { offersCount: 1 }
-    });
-    
-    return offer;
-  } catch (error) {
-    console.error('Error creating offer:', error);
-    throw error;
-  }
-};
+// Ensure virtuals are included in JSON
+offerSchema.set('toJSON', { virtuals: true });
 
 const Offer = mongoose.model('Offer', offerSchema);
 

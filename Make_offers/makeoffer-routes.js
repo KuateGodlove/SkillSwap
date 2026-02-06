@@ -13,7 +13,8 @@ const {
   withdrawOffer,
   sendMessage,
   addNegotiation,
-  getOfferStatistics
+  getOfferStatistics,
+  checkOfferEligibility
 } = require('./makeoffer-controller');
 
 router.use(checkAuth);
@@ -34,5 +35,6 @@ router.post('/:id/message', sendMessage);
 
 // ✅ Catch-all GET /:id LAST
 router.get('/:id', getOfferById);
+router.get('/check/:requestId', checkOfferEligibility);
 
 module.exports = router;

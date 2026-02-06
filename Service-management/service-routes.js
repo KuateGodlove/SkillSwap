@@ -5,38 +5,19 @@ const upload = require("../uploadMiddleware");
 
 const router = express.Router();
 
-// Public routes (no authentication required)
-router.get('/', serviceController.listAllUserServicesController); // Get all services
-router.get('/details/:id', serviceController.getServiceDetailsController); // Get service details
-router.get('/user/:userId', serviceController.listUserServicesController); // Get user's services
+// Public routes
+router.get('/', serviceController.getAllServices);
+router.get('/details/:id', serviceController.getServiceDetails);
+router.get('/user/:userId', serviceController.getUserServices);
 
-// Protected routes (require authentication)
+// Protected routes
 router.use(checkAuth);
 
-// Create service with image upload support
-router.post(
-  "/create",
-  upload.array('images', 5), // Max 5 images
-  serviceController.addServiceController
-);
-
-// Update service
-router.put(
-  "/update/:id",
-  upload.array('images', 5),
-  serviceController.updateServiceController
-);
-
-// Delete service
-router.delete('/delete/:id', serviceController.removeServiceController);
-
-// Get current user's services
-router.get('/my-services', serviceController.getMyServicesController);
-
-// Toggle service status
-router.patch('/toggle-status/:id', serviceController.toggleServiceStatusController);
-
-// Note: Removed this route as it conflicts with the public route above
-// router.get('/:id', getServiceDetailsController); 
+// ✅ CHANGE THIS LINE - from array to single
+router.post("/create", upload.single('image'), serviceController.createService);
+router.put("/update/:id", upload.array('images', 5), serviceController.updateService);
+router.delete('/delete/:id', serviceController.deleteService);
+router.get('/my-services', serviceController.getMyServices);
+router.patch('/toggle-status/:id', serviceController.toggleServiceStatus);
 
 module.exports = router;

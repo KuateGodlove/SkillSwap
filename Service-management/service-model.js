@@ -23,7 +23,7 @@ const serviceSchema = new Schema(
       required: [true, "Category is required"],
       enum: [
         "Technology",
-        "Design & Creative", 
+        "Design & Creative",
         "Writing & Translation",
         "Marketing",
         "Business",
@@ -49,7 +49,7 @@ const serviceSchema = new Schema(
       trim: true
     }],
     
-    // Location & Duration
+    // Location
     locationType: {
       type: String,
       enum: ["remote", "hybrid", "onsite"],
@@ -61,47 +61,38 @@ const serviceSchema = new Schema(
       trim: true
     },
     
-    duration: {
+    // Time commitment
+    estimatedTime: {
+      type: Number,
+      default: 1
+    },
+    
+    timeUnit: {
       type: String,
-      trim: true
+      enum: ["hours", "days", "weeks", "months"],
+      default: "days"
     },
     
     level: {
       type: String,
-      enum: ["beginner", "intermediate", "advanced"],
+      enum: ["beginner", "intermediate", "expert"],
       default: "intermediate"
     },
     
-    // Budget & Pricing
-    budgetType: {
+    // Exchange Type
+    exchangeType: {
       type: String,
-      enum: ["swap", "hourly", "fixed"],
-      default: "swap"
+      enum: ["direct_exchange", "mentorship", "collaboration", "learning"],
+      default: "direct_exchange"
     },
     
-    budgetValue: {
-      type: Number,
-      min: 0,
-      default: 0
-    },
-    
-    currency: {
-      type: String,
-      default: "USD"
-    },
-    
-    // Media & Metadata
-    images: [{
-      type: String, // Store image URLs
-      trim: true
-    }],
-    
-    coverImage: {
+    // SINGLE IMAGE - Simplified to match your route
+    image: {
       type: String,
       default: ""
     },
     
-    // Tags & Search
+    // Tags
     tags: [{
       type: String,
       trim: true
@@ -144,19 +135,18 @@ const serviceSchema = new Schema(
       max: 5
     },
     
-    reviewsCount: {
+    totalReviews: {
       type: Number,
       default: 0
     },
     
-    // Status & Visibility
-    status: {
-      type: String,
-      enum: ["active", "inactive", "completed", "archived"],
-      default: "active"
+    // Exchange Statistics
+    completedExchanges: {
+      type: Number,
+      default: 0
     },
     
-    // View & Engagement Counters
+    // Engagement Counters
     views: {
       type: Number,
       default: 0
@@ -167,243 +157,83 @@ const serviceSchema = new Schema(
       default: 0
     },
     
-    requests: {
+    inquiries: {
       type: Number,
       default: 0
     },
     
-    // Exchange Information (for matching)
-    exchangeFor: {
+    // Status
+    status: {
       type: String,
-      trim: true
-    },
-
-  // Add these new fields for enhanced service details:
-  detailedDescription: {
-    type: String,
-    maxlength: [20000, 'Detailed description cannot exceed 20000 characters']
-  },
-  
-  estimatedTime: {
-    type: String,
-    required: false
-  },
-  
-  timeUnit: {
-    type: String,
-    enum: ['hours', 'days', 'weeks', 'months'],
-    default: 'days'
-  },
-  
-  revisions: {
-    type: Number,
-    default: 1,
-    min: [0, 'Revisions cannot be negative']
-  },
-  
-  images: [{
-    url: {
-      type: String,
-      required: true
-    },
-    caption: String,
-    isPrimary: {
-      type: Boolean,
-      default: false
-    },
-    order: {
-      type: Number,
-      default: 0
+      enum: ["active", "inactive", "completed", "archived"],
+      default: "active"
     }
-  }],
-  
-  packages: [{
-    name: {
-      type: String,
-      required: true
-    },
-    price: {
-      type: Number,
-      required: true
-    },
-    description: String,
-    features: [String],
-    deliveryTime: String,
-    popular: {
-      type: Boolean,
-      default: false
-    }
-  }],
-  
-  requirements: [{
-    type: String,
-    trim: true
-  }],
-  
-  faqs: [{
-    question: {
-      type: String,
-      required: true
-    },
-    answer: {
-      type: String,
-      required: true
-    },
-    order: {
-      type: Number,
-      default: 0
-    }
-  }],
-  
-  // Stats for service details page
-  rating: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 5
   },
-  
-  totalReviews: {
-    type: Number,
-    default: 0
-  },
-  
-  totalOrders: {
-    type: Number,
-    default: 0
-  },
-  
-  views: {
-    type: Number,
-    default: 0
-  },
-  
-  likes: {
-    type: Number,
-    default: 0
-  },
-  
-  bookmarks: {
-    type: Number,
-    default: 0
-  },
-  
-  // Availability settings
-  availability: {
-    type: String,
-    enum: ['available', 'busy', 'unavailable', 'flexible'],
-    default: 'flexible'
-  },
-  
-  maxOrders: {
-    type: Number,
-    default: 5
-  },
-  
-  currentOrders: {
-    type: Number,
-    default: 0
-  },
-  
-  // Location settings
-  locationType: {
-    type: String,
-    enum: ['remote', 'onsite', 'hybrid'],
-    default: 'remote'
-  },
-  
-  // Timestamps
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  
-  updatedAt: {
-    type: Date,
-    default: Date.now
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
   }
+);
 
-}, {
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
-
-// Virtual for average delivery time
-serviceSchema.virtual('averageDeliveryTime').get(function() {
-  if (this.packages && this.packages.length > 0) {
-    const totalDays = this.packages.reduce((sum, pkg) => {
-      if (pkg.deliveryTime) {
-        const days = parseInt(pkg.deliveryTime) || 0;
-        return sum + days;
-      }
-      return sum;
-    }, 0);
-    return totalDays / this.packages.length;
-  }
-  return null;
-});
-
-// Virtual for starting price
-serviceSchema.virtual('startingPrice').get(function() {
-  if (this.packages && this.packages.length > 0) {
-    return Math.min(...this.packages.map(pkg => pkg.price));
-  }
-  return this.budgetValue || 0;
+// Virtual for time display
+serviceSchema.virtual('estimatedTimeDisplay').get(function() {
+  return `${this.estimatedTime} ${this.timeUnit}`;
 });
 
 // Virtual for availability status
 serviceSchema.virtual('isAvailable').get(function() {
-  return this.status === "active" && 
-         this.availability === "available" &&
-         this.currentOrders < this.maxOrders;
+  return this.status === "active" && this.availability !== "unavailable";
 });
 
-// Indexes
-serviceSchema.index({ title: 'text', description: 'text', detailedDescription: 'text', tags: 'text' });
-serviceSchema.index({ category: 1, subcategory: 1 });
-serviceSchema.index({ rating: -1 });
-serviceSchema.index({ totalOrders: -1 });
-serviceSchema.index({ createdAt: -1 });
-
-// Middleware to update updatedAt
-serviceSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
+// Virtual for exchange type display
+serviceSchema.virtual('exchangeTypeDisplay').get(function() {
+  const displayMap = {
+    direct_exchange: "Direct Exchange",
+    mentorship: "Mentorship",
+    collaboration: "Collaboration",
+    learning: "Learning Opportunity"
+  };
+  return displayMap[this.exchangeType] || this.exchangeType;
 });
 
-// Virtual for total budget value
-serviceSchema.virtual('totalBudget').get(function() {
-  if (this.budgetType === 'swap') {
-    return 'Skill Swap';
-  }
-  return `${this.currency} ${this.budgetValue}`;
+// Text indexes for search
+serviceSchema.index({ 
+  title: "text", 
+  description: "text", 
+  tags: "text",
+  skillsOffered: "text"
 });
 
 // Indexes for better query performance
-serviceSchema.index({ title: 'text', description: 'text', tags: 'text' });
-serviceSchema.index({ category: 1, status: 1 });
-serviceSchema.index({ userId: 1 });
+serviceSchema.index({ category: 1 });
+serviceSchema.index({ userId: 1, status: 1 });
+serviceSchema.index({ rating: -1 });
 serviceSchema.index({ createdAt: -1 });
+serviceSchema.index({ locationType: 1 });
 
 // Middleware to handle comma-separated strings from frontend
 serviceSchema.pre('save', function(next) {
   // Convert comma-separated strings to arrays
   if (typeof this.skillsOffered === 'string') {
-    this.skillsOffered = this.skillsOffered.split(',').map(skill => skill.trim()).filter(skill => skill);
+    this.skillsOffered = this.skillsOffered
+      .split(',')
+      .map(skill => skill.trim())
+      .filter(skill => skill);
   }
   
   if (typeof this.skillsWanted === 'string') {
-    this.skillsWanted = this.skillsWanted.split(',').map(skill => skill.trim()).filter(skill => skill);
+    this.skillsWanted = this.skillsWanted
+      .split(',')
+      .map(skill => skill.trim())
+      .filter(skill => skill);
   }
   
   if (typeof this.tags === 'string') {
-    this.tags = this.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
-  }
-  
-  // Set cover image from first uploaded image
-  if (this.images && this.images.length > 0 && !this.coverImage) {
-    this.coverImage = this.images[0];
+    this.tags = this.tags
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(tag => tag);
   }
   
   next();
