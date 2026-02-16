@@ -9,15 +9,16 @@ const path = require('path');
 dotenv.config();
 
 // Import routes
-const authRoutes = require('./routes/authRoutes');
-const userRoutes = require('./routes/userRoutes');
-const rfqRoutes = require('./routes/rfqRoutes');
-const quoteRoutes = require('./routes/quoteRoutes');
-const membershipRoutes = require('./routes/membershipRoutes');
-const serviceRoutes = require('./routes/serviceRoutes');
-const orderRoutes = require('./routes/orderRoutes');
-const paymentRoutes = require('./routes/paymentRoutes');
-const adminRoutes = require('./routes/adminRoutes');
+const authRoutes = require('./Routes/authRoutes');
+const userRoutes = require('./Routes/userRoutes');
+const rfqRoutes = require('./Routes/rfqRoutes');
+const quoteRoutes = require('./Routes/quoteRoutes');
+const membershipRoutes = require('./Routes/membershipRoutes');
+const serviceRoutes = require('./Routes/serviceRoutes');
+const orderRoutes = require('./Routes/orderRoutes');
+const paymentRoutes = require('./Routes/paymentRoutes');
+const adminRoutes = require('./Routes/adminRoutes');
+const publicRoutes = require('./Routes/public-routes');
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
+app.use('/api/public', publicRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/rfqs', rfqRoutes);

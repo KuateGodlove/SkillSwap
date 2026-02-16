@@ -1,7 +1,7 @@
 // controllers/quoteController.js
-const Quote = require('../models/Quote');
-const RFQ = require('../models/RFQ');
-const User = require('../models/User');
+const Quote = require('../Models/Quote');
+const RFQ = require('../Models/RFQ');
+const User = require('../Models/User');
 
 // @desc    Submit a quote
 // @route   POST /api/rfqs/:rfqId/quotes

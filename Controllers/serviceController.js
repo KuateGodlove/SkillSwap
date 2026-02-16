@@ -1,6 +1,6 @@
 // controllers/serviceController.js
-const Service = require('../models/Service');
-const User = require('../models/User');
+const Service = require('../Models/Service');
+const User = require('../Models/User');
 
 // @desc    Get all services (public)
 // @route   GET /api/services
@@ -293,6 +293,99 @@ exports.updateStatus = async (req, res) => {
       success: false,
       message: 'Failed to update status', 
       error: error.message 
+    });
+  }
+};
+
+// @desc    Get featured services
+// @route   GET /api/public/services/featured
+// @access  Public
+exports.getFeaturedServices = async (req, res) => {
+  try {
+    const services = await Service.find({ status: 'active', featured: true })
+      .populate('providerId', 'firstName lastName providerDetails.businessName providerDetails.rating')
+      .limit(8)
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      services
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch featured services',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Search services
+// @route   GET /api/public/services/search
+// @access  Public
+exports.searchServices = async (req, res) => {
+  try {
+    const { q, category, minPrice, maxPrice } = req.query;
+
+    const filter = { status: 'active' };
+
+    if (category) filter.category = category;
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = parseInt(minPrice);
+      if (maxPrice) filter.price.$lte = parseInt(maxPrice);
+    }
+
+    if (q) {
+      filter.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } },
+        { tags: { $in: [new RegExp(q, 'i')] } }
+      ];
+    }
+
+    const services = await Service.find(filter)
+      .populate('providerId', 'firstName lastName')
+      .sort({ featured: -1, createdAt: -1 });
+
+    res.json({
+      success: true,
+      services
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search services',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get service categories
+// @route   GET /api/public/categories
+// @access  Public
+exports.getCategories = async (req, res) => {
+  try {
+    const categories = [
+      { id: 'web-dev', name: 'Web Development', icon: '💻' },
+      { id: 'design', name: 'Design', icon: '🎨' },
+      { id: 'marketing', name: 'Marketing', icon: '📢' },
+      { id: 'writing', name: 'Writing', icon: '✍️' },
+      { id: 'mobile', name: 'Mobile Development', icon: '📱' },
+      { id: 'data', name: 'Data Science', icon: '📊' },
+      { id: 'business', name: 'Business Consulting', icon: '💼' },
+      { id: 'other', name: 'Other', icon: '⭐' }
+    ];
+
+    res.json({
+      success: true,
+      categories
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch categories',
+      error: error.message
     });
   }
 };

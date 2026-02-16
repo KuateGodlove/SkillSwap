@@ -1,7 +1,7 @@
 // routes/membershipRoutes.js
 const express = require('express');
 const router = express.Router();
-const membershipController = require('../controllers/membershipController');
+const membershipController = require('../Controllers/membershipController');
 const { authenticate, authorize } = require('../middleware/auth');
 
 // Public route

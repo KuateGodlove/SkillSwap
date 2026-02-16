@@ -1,6 +1,6 @@
-const Service = require('../Models/service-model');
+const Service = require('../Models/Service');
 const Project = require('../Models/Project-model');
-const User = require('../Models/user-model');
+const User = require('../Models/User');
 
 // Create Project (Client)
 exports.createProject = async (req, res) => {

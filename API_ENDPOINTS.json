@@ -1,0 +1,625 @@
+{
+  "baseUrl": "http://localhost:5000/api",
+  "headers": {
+    "authenticated": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer YOUR_JWT_TOKEN_HERE"
+    },
+    "public": {
+      "Content-Type": "application/json"
+    }
+  },
+  "authentication": {
+    "registerClient": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/auth/register/client",
+      "auth": false,
+      "body": {
+        "email": "client@example.com",
+        "password": "securepass123",
+        "firstName": "John",
+        "lastName": "Doe",
+        "phone": "+1234567890",
+        "country": "United States",
+        "companyName": "Tech Solutions",
+        "jobTitle": "Project Manager"
+      }
+    },
+    "registerProvider": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/auth/register/provider",
+      "auth": false,
+      "body": {
+        "email": "provider@example.com",
+        "password": "securepass123",
+        "firstName": "Jane",
+        "lastName": "Smith",
+        "phone": "+1234567890",
+        "country": "United States",
+        "businessName": "Jane Development",
+        "yearsExperience": 5,
+        "specialization": "Web Development",
+        "skills": ["React", "Node.js", "MongoDB"],
+        "hourlyRate": 75,
+        "minimumProjectSize": 500,
+        "portfolioUrl": "https://portfolio.com",
+        "linkedinUrl": "https://linkedin.com/in/janesmith",
+        "githubUrl": "https://github.com/janesmith"
+      }
+    },
+    "login": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/auth/login",
+      "auth": false,
+      "body": {
+        "email": "user@example.com",
+        "password": "securepass123"
+      }
+    },
+    "forgotPassword": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/auth/forgot-password",
+      "auth": false,
+      "body": {
+        "email": "user@example.com"
+      }
+    },
+    "resetPassword": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/auth/reset-password",
+      "auth": false,
+      "body": {
+        "token": "reset_token_from_email",
+        "newPassword": "newsecurepass456"
+      }
+    },
+    "verifyEmail": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/auth/verify-email/email_verification_token",
+      "auth": false
+    },
+    "logout": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/auth/logout",
+      "auth": true,
+      "body": {}
+    },
+    "refreshToken": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/auth/refresh-token",
+      "auth": true,
+      "body": {}
+    }
+  },
+  "users": {
+    "getProfile": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/users/profile",
+      "auth": true
+    },
+    "updateProfile": {
+      "method": "PUT",
+      "url": "http://localhost:5000/api/users/profile",
+      "auth": true,
+      "body": {
+        "firstName": "John",
+        "lastName": "Doe",
+        "phone": "+1234567890",
+        "avatar": "https://example.com/avatar.jpg",
+        "country": "United States"
+      }
+    },
+    "uploadAvatar": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/users/avatar",
+      "auth": true,
+      "contentType": "multipart/form-data",
+      "body": "FormData with 'avatar' file field"
+    },
+    "getPublicProfile": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/users/65f1a2b3c4d5e6f7g8h9i0j1/public",
+      "auth": false,
+      "note": "Replace ID with actual provider ID"
+    },
+    "getSavedProviders": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/users/saved-providers",
+      "auth": true,
+      "role": "client"
+    },
+    "saveProvider": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/users/saved-providers/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "role": "client",
+      "body": {},
+      "note": "Replace ID with actual provider ID"
+    },
+    "removeSavedProvider": {
+      "method": "DELETE",
+      "url": "http://localhost:5000/api/users/saved-providers/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "role": "client",
+      "note": "Replace ID with actual provider ID"
+    },
+    "getProviderStats": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/users/provider/stats",
+      "auth": true,
+      "role": "provider"
+    }
+  },
+  "rfqs": {
+    "createRFQ": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/rfqs",
+      "auth": true,
+      "role": "client",
+      "body": {
+        "title": "Website Redesign Project",
+        "description": "Looking for a professional web developer to redesign our company website with modern UI/UX principles",
+        "category": "web-development",
+        "subcategory": "full-stack",
+        "budgetType": "fixed",
+        "budgetMin": 2000,
+        "budgetMax": 5000,
+        "timeline": "4-6 weeks",
+        "deadline": "2026-03-16",
+        "skills": ["React", "Node.js", "MongoDB"],
+        "experience": "intermediate",
+        "requirements": ["Responsive design", "Mobile-first approach", "SEO optimized"]
+      }
+    },
+    "getMyRFQs": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/rfqs/my",
+      "auth": true,
+      "role": "client"
+    },
+    "getRFQDetails": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/rfqs/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "note": "Replace ID with actual RFQ ID"
+    },
+    "updateRFQ": {
+      "method": "PUT",
+      "url": "http://localhost:5000/api/rfqs/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "role": "client",
+      "body": {
+        "title": "Updated Website Redesign",
+        "description": "Updated requirements for website redesign",
+        "budgetMin": 2500,
+        "budgetMax": 6000
+      },
+      "note": "Replace ID with actual RFQ ID"
+    },
+    "deleteRFQ": {
+      "method": "DELETE",
+      "url": "http://localhost:5000/api/rfqs/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "role": "client",
+      "note": "Replace ID with actual RFQ ID"
+    },
+    "getRFQResponses": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/rfqs/65f1a2b3c4d5e6f7g8h9i0j1/responses",
+      "auth": true,
+      "role": "client",
+      "note": "Replace ID with actual RFQ ID"
+    },
+    "selectSupplier": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/rfqs/65f1a2b3c4d5e6f7g8h9i0j1/select/65f1a2b3c4d5e6f7g8h9i0j2",
+      "auth": true,
+      "role": "client",
+      "body": {},
+      "note": "Replace first ID with RFQ ID, second with Quote ID"
+    },
+    "getRFQMarket": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/rfqs/market",
+      "auth": true,
+      "role": "provider",
+      "query": "?category=web-development&minBudget=1000&maxBudget=10000&page=1&limit=10"
+    },
+    "getProviderRFQView": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/rfqs/65f1a2b3c4d5e6f7g8h9i0j1/provider-view",
+      "auth": true,
+      "role": "provider",
+      "note": "Replace ID with actual RFQ ID"
+    }
+  },
+  "quotes": {
+    "submitQuote": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/rfqs/65f1a2b3c4d5e6f7g8h9i0j1/quotes",
+      "auth": true,
+      "role": "provider",
+      "body": {
+        "amount": 3500,
+        "deliveryTime": "4 weeks",
+        "proposal": "I have 5 years of experience in full-stack web development. I can deliver a modern, responsive website with all your requirements met.",
+        "milestones": [
+          {
+            "title": "Design Phase",
+            "description": "UI/UX design and mockups",
+            "amount": 700,
+            "dueDate": "2026-02-28"
+          },
+          {
+            "title": "Development Phase",
+            "description": "Frontend and backend development",
+            "amount": 1800,
+            "dueDate": "2026-03-14"
+          },
+          {
+            "title": "Testing & Deployment",
+            "description": "QA testing and production deployment",
+            "amount": 1000,
+            "dueDate": "2026-03-16"
+          }
+        ]
+      },
+      "note": "Replace ID with actual RFQ ID"
+    },
+    "getMyQuotes": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/quotes/my",
+      "auth": true,
+      "role": "provider"
+    },
+    "getQuoteDetails": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/quotes/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "note": "Replace ID with actual Quote ID"
+    },
+    "updateQuote": {
+      "method": "PUT",
+      "url": "http://localhost:5000/api/quotes/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "role": "provider",
+      "body": {
+        "amount": 3700,
+        "deliveryTime": "4.5 weeks",
+        "proposal": "Updated proposal with additional features"
+      },
+      "note": "Replace ID with actual Quote ID"
+    },
+    "withdrawQuote": {
+      "method": "DELETE",
+      "url": "http://localhost:5000/api/quotes/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "role": "provider",
+      "note": "Replace ID with actual Quote ID"
+    }
+  },
+  "services": {
+    "getServices": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/services",
+      "auth": false,
+      "query": "?category=web-dev&minPrice=500&maxPrice=5000&search=react&page=1&limit=10"
+    },
+    "getFeaturedServices": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/public/services/featured",
+      "auth": false
+    },
+    "searchServices": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/public/services/search",
+      "auth": false,
+      "query": "?q=web+development&category=web-dev&minPrice=500&maxPrice=5000"
+    },
+    "getServiceDetails": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/services/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": false,
+      "note": "Replace ID with actual Service ID"
+    },
+    "createService": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/services",
+      "auth": true,
+      "role": "provider",
+      "body": {
+        "title": "Full Stack Web Development",
+        "description": "Professional web development services including frontend, backend, and database design. Experienced in React, Node.js, and MongoDB.",
+        "category": "web-development",
+        "subcategory": "full-stack",
+        "tags": ["react", "nodejs", "mongodb", "web-dev"],
+        "priceType": "hourly",
+        "hourlyRate": 75,
+        "deliveryTime": "2-4 weeks",
+        "description": "I provide comprehensive web development services",
+        "features": ["Responsive design", "SEO optimized", "Mobile friendly", "API integration"],
+        "featured": false
+      }
+    },
+    "getMyServices": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/services/provider/my",
+      "auth": true,
+      "role": "provider"
+    },
+    "updateService": {
+      "method": "PUT",
+      "url": "http://localhost:5000/api/services/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "role": "provider",
+      "body": {
+        "title": "Updated Full Stack Web Development",
+        "hourlyRate": 85,
+        "description": "Updated service description"
+      },
+      "note": "Replace ID with actual Service ID"
+    },
+    "deleteService": {
+      "method": "DELETE",
+      "url": "http://localhost:5000/api/services/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "role": "provider",
+      "note": "Replace ID with actual Service ID"
+    },
+    "duplicateService": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/services/65f1a2b3c4d5e6f7g8h9i0j1/duplicate",
+      "auth": true,
+      "role": "provider",
+      "body": {},
+      "note": "Replace ID with actual Service ID"
+    },
+    "updateServiceStatus": {
+      "method": "PATCH",
+      "url": "http://localhost:5000/api/services/65f1a2b3c4d5e6f7g8h9i0j1/status",
+      "auth": true,
+      "role": "provider",
+      "body": {
+        "status": "active"
+      },
+      "note": "Replace ID with actual Service ID. Status: active, inactive, pending"
+    },
+    "getCategories": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/public/categories",
+      "auth": false
+    }
+  },
+  "orders": {
+    "getClientOrders": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/orders/client",
+      "auth": true,
+      "role": "client",
+      "query": "?status=in-progress&page=1&limit=10"
+    },
+    "getProviderOrders": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/orders/provider",
+      "auth": true,
+      "role": "provider",
+      "query": "?status=in-progress&page=1&limit=10"
+    },
+    "getOrderDetails": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/orders/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "note": "Replace ID with actual Order ID"
+    },
+    "approveMilestone": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/orders/65f1a2b3c4d5e6f7g8h9i0j1/milestones/65f1a2b3c4d5e6f7g8h9i0j2/approve",
+      "auth": true,
+      "role": "client",
+      "body": {
+        "rating": 5,
+        "review": "Excellent work! Very professional and delivered on time."
+      },
+      "note": "Replace IDs with actual Order and Milestone IDs"
+    },
+    "uploadDeliverable": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/orders/65f1a2b3c4d5e6f7g8h9i0j1/milestones/65f1a2b3c4d5e6f7g8h9i0j2/upload",
+      "auth": true,
+      "role": "provider",
+      "contentType": "multipart/form-data",
+      "body": "FormData with 'deliverable' file field",
+      "note": "Replace IDs with actual Order and Milestone IDs"
+    },
+    "getMessages": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/orders/65f1a2b3c4d5e6f7g8h9i0j1/messages",
+      "auth": true,
+      "query": "?page=1&limit=20",
+      "note": "Replace ID with actual Order ID"
+    },
+    "sendMessage": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/orders/65f1a2b3c4d5e6f7g8h9i0j1/messages",
+      "auth": true,
+      "body": {
+        "text": "This is a message in the order conversation"
+      },
+      "note": "Replace ID with actual Order ID"
+    }
+  },
+  "payments": {
+    "createPaymentIntent": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/payments/create-payment-intent",
+      "auth": true,
+      "role": "client",
+      "body": {
+        "orderId": "65f1a2b3c4d5e6f7g8h9i0j1",
+        "amount": 3500
+      }
+    },
+    "confirmPayment": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/payments/confirm",
+      "auth": true,
+      "body": {
+        "paymentId": "65f1a2b3c4d5e6f7g8h9i0j1",
+        "paymentMethodId": "pm_stripe_method_id"
+      }
+    },
+    "getPaymentHistory": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/payments/history",
+      "auth": true,
+      "query": "?status=completed&type=order-payment&page=1&limit=10"
+    },
+    "getInvoice": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/payments/invoices/65f1a2b3c4d5e6f7g8h9i0j1",
+      "auth": true,
+      "note": "Replace ID with actual Invoice/Payment ID"
+    },
+    "requestWithdrawal": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/payments/withdraw",
+      "auth": true,
+      "role": "provider",
+      "body": {
+        "amount": 5000,
+        "bankAccount": {
+          "accountNumber": "123456789",
+          "routingNumber": "987654321",
+          "accountHolder": "Jane Smith",
+          "bankName": "Example Bank"
+        }
+      }
+    }
+  },
+  "membership": {
+    "getPlans": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/membership/plans",
+      "auth": false
+    },
+    "subscribe": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/membership/subscribe",
+      "auth": true,
+      "role": "provider",
+      "body": {
+        "tier": "gold",
+        "billingCycle": "annual"
+      }
+    },
+    "getCurrentMembership": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/membership/current",
+      "auth": true,
+      "role": "provider"
+    },
+    "cancelMembership": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/membership/cancel",
+      "auth": true,
+      "role": "provider",
+      "body": {
+        "reason": "Not using the service"
+      }
+    },
+    "renewMembership": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/membership/renew",
+      "auth": true,
+      "role": "provider",
+      "body": {}
+    },
+    "upgradeMembership": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/membership/upgrade",
+      "auth": true,
+      "role": "provider",
+      "body": {
+        "newTier": "platinum",
+        "billingCycle": "annual"
+      }
+    }
+  },
+  "admin": {
+    "getPendingProviders": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/admin/providers/pending",
+      "auth": true,
+      "role": "admin",
+      "query": "?page=1&limit=10"
+    },
+    "approveProvider": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/admin/providers/65f1a2b3c4d5e6f7g8h9i0j1/approve",
+      "auth": true,
+      "role": "admin",
+      "body": {},
+      "note": "Replace ID with actual Provider User ID"
+    },
+    "rejectProvider": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/admin/providers/65f1a2b3c4d5e6f7g8h9i0j1/reject",
+      "auth": true,
+      "role": "admin",
+      "body": {
+        "reason": "Incomplete documentation"
+      },
+      "note": "Replace ID with actual Provider User ID"
+    },
+    "getPendingServices": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/admin/services/pending",
+      "auth": true,
+      "role": "admin",
+      "query": "?page=1&limit=10"
+    },
+    "approveService": {
+      "method": "POST",
+      "url": "http://localhost:5000/api/admin/services/65f1a2b3c4d5e6f7g8h9i0j1/approve",
+      "auth": true,
+      "role": "admin",
+      "body": {},
+      "note": "Replace ID with actual Service ID"
+    },
+    "getPlatformStats": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/admin/stats",
+      "auth": true,
+      "role": "admin"
+    },
+    "getUsers": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/admin/users",
+      "auth": true,
+      "role": "admin",
+      "query": "?role=provider&status=approved&page=1&limit=10&search=john"
+    },
+    "updateUserStatus": {
+      "method": "PATCH",
+      "url": "http://localhost:5000/api/admin/users/65f1a2b3c4d5e6f7g8h9i0j1/status",
+      "auth": true,
+      "role": "admin",
+      "body": {
+        "status": "suspended"
+      },
+      "note": "Replace ID with actual User ID. Status: pending, approved, rejected, suspended"
+    }
+  },
+  "public": {
+    "getStats": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/public/stats",
+      "auth": false
+    },
+    "healthCheck": {
+      "method": "GET",
+      "url": "http://localhost:5000/api/health",
+      "auth": false
+    }
+  }
+}

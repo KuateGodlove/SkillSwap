@@ -1,4 +1,3 @@
-module.exports = require('../Models/Service');
 // models/Service.js
 const mongoose = require('mongoose');
 

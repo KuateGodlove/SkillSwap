@@ -1,7 +1,7 @@
 // controllers/rfqController.js
-const RFQ = require('../models/RFQ');
-const Quote = require('../models/Quote');
-const User = require('../models/User');
+const RFQ = require('../Models/RFQ');
+const Quote = require('../Models/Quote');
+const User = require('../Models/User');
 
 // Helper function to calculate match score
 const calculateMatchScore = (providerSkills, requiredSkills) => {

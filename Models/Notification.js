@@ -46,6 +46,7 @@ const notificationSchema = new mongoose.Schema({
     requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'Request' },
     offerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' },
     conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation' },
+    orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
     transactionId: { type: String },
     amount: { type: Number },
     rating: { type: Number }
@@ -155,4 +156,4 @@ notificationSchema.statics.getUnreadCount = async function(userId) {
   });
 };
 
-module.exports = Notification;
+module.exports = mongoose.model('Notification', notificationSchema);

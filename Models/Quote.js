@@ -1,4 +1,3 @@
-module.exports = require('../Models/Quote');
 // models/Quote.js
 const mongoose = require('mongoose');
 

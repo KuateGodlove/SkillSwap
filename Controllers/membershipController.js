@@ -1,5 +1,5 @@
 // controllers/membershipController.js
-const User = require('../models/User');
+const User = require('../Models/User');
 
 // Membership plans configuration
 const MEMBERSHIP_PLANS = {

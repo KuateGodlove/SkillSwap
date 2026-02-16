@@ -1,4 +1,3 @@
-module.exports = require('../Models/RFQ');
 // models/RFQ.js
 const mongoose = require('mongoose');
 

@@ -1,8 +1,8 @@
 // routes/rfqRoutes.js
 const express = require('express');
 const router = express.Router();
-const rfqController = require('../controllers/rfqController');
-const quoteController = require('../controllers/quoteController');
+const rfqController = require('../Controllers/rfqController');
+const quoteController = require('../Controllers/quoteController');
 const { authenticate, authorize } = require('../middleware/auth');
 
 // All routes require authentication
