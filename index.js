@@ -1,54 +1,86 @@
-const express = require("express");
+// server.js
+const express = require('express');
+const mongoose = require('mongoose');
 const cors = require('cors');
-const mongoose = require("mongoose");
-const userRoutes = require("./authentification/user-routes");
-const serviceRoutes = require("./Service-management/service-routes")
-const profileRoutes = require("./Profile_management/profile-routes");
-const requestRoutes = require("./Service_request_management/request-routes");
-const notificationRoutes = require('./Notification/notification-routes');
-const offerRoutes = require('./Make_offers/makeoffer-routes');
+const dotenv = require('dotenv');
+const path = require('path');
+
+// Load environment variables
+dotenv.config();
+
+// Import routes
+const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const rfqRoutes = require('./routes/rfqRoutes');
+const quoteRoutes = require('./routes/quoteRoutes');
+const membershipRoutes = require('./routes/membershipRoutes');
+const serviceRoutes = require('./routes/serviceRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
+
+// Middleware
 app.use(cors({
-  origin: ["http://localhost:5173", "http://localhost:5174"], // allow both ports
-  credentials: true,
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
 }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
+// Serve static files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-const dotenv = require("dotenv");
-dotenv.config();
-app.use(express.json({}));
-mongoose.connect("mongodb://localhost:27017/mydatabase");
-if (mongoose.connection) {
-  console.log("MongoDB connection ok");
-}
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/rfqs', rfqRoutes);
+app.use('/api/quotes', quoteRoutes);
+app.use('/api/membership', membershipRoutes);
+app.use('/api/services', serviceRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/admin', adminRoutes);
 
-app.get('/api/debug/auth-test', (req, res) => {
-  console.log('=== AUTH DEBUG INFO ===');
-  console.log('Headers:', req.headers);
-  console.log('Authorization Header:', req.headers.authorization);
-  res.json({ message: 'Auth test endpoint reached' });
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date() });
 });
 
-app.use("/api/users", userRoutes);
-app.use("/api/services", serviceRoutes);
-app.use("/api/profile", profileRoutes);
-app.use("/api/requests", requestRoutes);
-app.use("/uploads", express.static("uploads"));
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/offers', offerRoutes);
-
-// Global error handler (return JSON)
+// Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  if (res.headersSent) return next(err);
-  res.status(err.status || 500).json({
+  console.error(err.stack);
+  res.status(500).json({ 
     success: false,
-    message: err.message || 'Internal Server Error'
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
 });
 
-const port = 5000;
-app.listen(port, () => {
-  console.log(`Server is running on ${port}`);
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/skillswapp', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => {
+  console.log('✅ Connected to MongoDB');
+  
+  // Start server
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📝 API available at http://localhost:${PORT}/api`);
+  });
+})
+.catch(err => {
+  console.error('❌ MongoDB connection error:', err);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  console.log('UNHANDLED REJECTION! 💥 Shutting down...');
+  console.error(err);
+  process.exit(1);
 });
