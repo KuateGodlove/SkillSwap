@@ -29,21 +29,25 @@ const server = http.createServer(app);
 
 // ==================== CORS CONFIGURATION ====================
 const allowedOrigins = [
-  'http://localhost:5173',  // Your current frontend
-  'http://localhost:5174',  // Alternative port
-  'http://localhost:3000',  // Common React port
-  'http://127.0.0.1:5173',  // IP version
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
-  'http://localhost:5000',  // Backend itself
-  process.env.FRONTEND_URL, // From .env if set
-].filter(Boolean); // Remove undefined values
+  'http://localhost:5000',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
 
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+    // Allow all Vercel deployment URLs (including preview/branch URLs)
+    const isVercel = origin.endsWith('.vercel.app');
+    const isAllowed = allowedOrigins.includes(origin);
+
+    if (isAllowed || isVercel || process.env.NODE_ENV === 'development') {
       callback(null, true);
     } else {
       console.log('❌ Blocked origin:', origin);
