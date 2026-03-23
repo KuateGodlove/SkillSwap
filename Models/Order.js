@@ -5,13 +5,15 @@ const orderSchema = new mongoose.Schema({
   // References
   rfqId: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: 'RFQ', 
-    required: true 
+    ref: 'RFQ'
   },
   quoteId: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Quote', 
-    required: true 
+    ref: 'Quote'
+  },
+  serviceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Service'
   },
   clientId: { 
     type: mongoose.Schema.Types.ObjectId, 

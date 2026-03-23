@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../Controllers/userController');
 const { authenticate, authorize } = require('../middleware/auth');
-const upload = require('../middleware/upload');
+const { avatarUpload } = require('../middleware/upload');
 
 // All routes require authentication
 router.use(authenticate);
@@ -11,7 +11,7 @@ router.use(authenticate);
 // Profile routes
 router.get('/profile', userController.getProfile);
 router.put('/profile', userController.updateProfile);
-router.post('/avatar', upload.single('avatar'), userController.uploadAvatar);
+router.post('/avatar', avatarUpload.single('avatar'), userController.uploadAvatar);
 
 // Saved providers (for clients)
 router.get('/saved-providers', authorize('client'), userController.getSavedProviders);

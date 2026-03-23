@@ -2,6 +2,7 @@
 const Quote = require('../Models/Quote');
 const RFQ = require('../Models/RFQ');
 const User = require('../Models/User');
+const Notification = require('../Models/Notification');
 
 // @desc    Submit a quote
 // @route   POST /api/rfqs/:rfqId/quotes
@@ -36,10 +37,12 @@ exports.submitQuote = async (req, res) => {
       submittedAt: { $gte: startOfMonth }
     });
 
-    if (quotesThisMonth >= req.user.membership.rfqQuota) {
+    const rfqQuota = req.user.membership?.rfqQuota ?? 10;
+    
+    if (quotesThisMonth >= rfqQuota) {
       return res.status(400).json({ 
         success: false,
-        message: 'Monthly RFQ quota exceeded' 
+        message: `Monthly RFQ quota exceeded (${rfqQuota}). Please upgrade your membership.` 
       });
     }
 
@@ -54,6 +57,22 @@ exports.submitQuote = async (req, res) => {
 
     rfq.quotes += 1;
     await rfq.save();
+
+    // Create notification for client
+    const notification = await Notification.create({
+      userId: rfq.clientId,
+      type: 'offer_accepted', // Using an existing type or we can add 'new_quote' if we update the model
+      title: 'New Quote Received',
+      message: `${req.user.firstName} has submitted a quote for your RFQ: ${rfq.title}`,
+      data: { rfqId: rfq._id, quoteId: quote._id },
+      link: `/client/rfqs/${rfq._id}/responses`,
+      priority: 'medium'
+    });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(rfq.clientId.toString()).emit('newNotification', notification);
+    }
 
     res.status(201).json({
       success: true,

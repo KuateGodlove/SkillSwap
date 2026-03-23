@@ -23,4 +23,7 @@ router.get('/stats', adminController.getPlatformStats);
 router.get('/users', adminController.getUsers);
 router.patch('/users/:userId/status', adminController.updateUserStatus);
 
+// Transaction management
+router.get('/transactions', adminController.getAllTransactions);
+
 module.exports = router;

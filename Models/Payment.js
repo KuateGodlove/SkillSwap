@@ -1,72 +1,51 @@
 const mongoose = require('mongoose');
+const { customAlphabet } = require('nanoid');
+
+const nanoid = customAlphabet('1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ', 10);
 
 const paymentSchema = new mongoose.Schema({
-  // References
-  userId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
     required: true,
-    index: true
+    index: true,
   },
-  orderId: { 
-    type: mongoose.Schema.Types.ObjectId, 
+  orderId: {
+    type: mongoose.Schema.Types.ObjectId,
     ref: 'Order',
-    index: true
+    index: true,
   },
-  
-  // Payment Details
-  amount: { 
-    type: Number, 
-    required: true 
+  amount: {
+    type: Number,
+    required: true,
   },
-  currency: { 
-    type: String, 
-    default: 'USD' 
-  },
-  
-  // Payment Method
-  paymentMethod: {
+  currency: {
     type: String,
-    enum: ['stripe', 'paypal', 'bank-transfer'],
-    default: 'stripe'
+    default: 'XAF',
   },
-  
-  // Associated IDs
-  stripePaymentIntentId: String,
-  paypalTransactionId: String,
-  bankTransactionId: String,
-  
-  // Status
   status: {
     type: String,
-    enum: ['pending', 'processing', 'completed', 'failed', 'refunded'],
-    default: 'pending'
+    enum: ['pending', 'completed', 'failed', 'processing', 'refunded'],
+    default: 'pending',
+    index: true,
   },
-  
-  // Transaction Details
-  description: String,
-  invoiceNumber: String,
-  receiptUrl: String,
-  
-  // Payment Type
   type: {
     type: String,
-    enum: ['order-payment', 'membership', 'refund', 'withdrawal'],
-    default: 'order-payment'
+    enum: ['order-payment', 'subscription', 'payout', 'refund'],
+    required: true,
+    index: true,
   },
-  
-  // Metadata
+  paymentMethod: {
+    type: String,
+  },
+  invoiceNumber: {
+    type: String,
+    default: () => `INV-${nanoid()}`,
+    unique: true,
+  },
   metadata: mongoose.Schema.Types.Mixed,
-  
-  // Dates
-  processedAt: Date,
-  completedAt: Date,
-  refundedAt: Date
-}, { timestamps: true });
-
-// Index for faster queries
-paymentSchema.index({ userId: 1, createdAt: -1 });
-paymentSchema.index({ orderId: 1 });
-paymentSchema.index({ status: 1 });
+}, {
+  timestamps: true,
+});
 
 module.exports = mongoose.model('Payment', paymentSchema);

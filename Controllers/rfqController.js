@@ -2,6 +2,7 @@
 const RFQ = require('../Models/RFQ');
 const Quote = require('../Models/Quote');
 const User = require('../Models/User');
+const Notification = require('../Models/Notification');
 
 // Helper function to calculate match score
 const calculateMatchScore = (providerSkills, requiredSkills) => {
@@ -19,13 +20,50 @@ const calculateMatchScore = (providerSkills, requiredSkills) => {
 // @access  Private (Client only)
 exports.createRFQ = async (req, res) => {
   try {
+    console.info('[RFQ:create] start', {
+      userId: req.user?._id,
+      role: req.user?.role,
+      bodyKeys: Object.keys(req.body || {})
+    });
+
+    const budgetMin = req.body?.budgetMin !== undefined ? Number(req.body.budgetMin) : undefined;
+    const budgetMax = req.body?.budgetMax !== undefined ? Number(req.body.budgetMax) : undefined;
+
     const rfqData = {
       ...req.body,
+      budgetMin: Number.isFinite(budgetMin) ? budgetMin : req.body?.budgetMin,
+      budgetMax: Number.isFinite(budgetMax) ? budgetMax : req.body?.budgetMax,
       clientId: req.user._id,
       clientCompany: req.user.clientDetails?.companyName,
       postedAt: new Date(),
       expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 14 days
     };
+
+    if (req.body?.skills && typeof req.body.skills === 'string') {
+      rfqData.skills = req.body.skills.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    if (req.file) {
+      rfqData.attachments = [{
+        filename: req.file.originalname,
+        path: `/uploads/rfqs/${req.file.filename}`,
+        size: req.file.size,
+        uploadedAt: new Date()
+      }];
+    }
+
+    console.info('[RFQ:create] data', {
+      clientId: rfqData.clientId,
+      clientCompany: rfqData.clientCompany,
+      category: rfqData.category,
+      timeline: rfqData.timeline,
+      budgetMin: rfqData.budgetMin,
+      budgetMax: rfqData.budgetMax,
+      skills: rfqData.skills,
+      attachment: req.file ? req.file.filename : null,
+      postedAt: rfqData.postedAt,
+      expiresAt: rfqData.expiresAt
+    });
 
     const rfq = new RFQ(rfqData);
     await rfq.save();
@@ -35,13 +73,24 @@ exports.createRFQ = async (req, res) => {
       $inc: { 'clientDetails.projectsPosted': 1 }
     });
 
+    console.info('[RFQ:create] success', { rfqId: rfq._id });
+
     res.status(201).json({
       success: true,
       message: 'RFQ created successfully',
       rfq
     });
   } catch (error) {
-    console.error('Create RFQ error:', error);
+    console.error('[RFQ:create] error', {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      errors: error.errors,
+      stack: error.stack,
+      userId: req.user?._id,
+      role: req.user?.role,
+      body: req.body
+    });
     res.status(500).json({ 
       success: false,
       message: 'Failed to create RFQ', 
@@ -58,9 +107,14 @@ exports.getMyRFQs = async (req, res) => {
     const rfqs = await RFQ.find({ clientId: req.user._id })
       .sort({ postedAt: -1 });
 
+    const normalized = rfqs.map(rfq => {
+      const obj = rfq.toObject({ getters: true });
+      return { ...obj, id: obj._id };
+    });
+
     res.json({
       success: true,
-      rfqs
+      rfqs: normalized
     });
   } catch (error) {
     res.status(500).json({ 
@@ -96,7 +150,7 @@ exports.getRFQDetails = async (req, res) => {
 
     res.json({
       success: true,
-      rfq
+      rfq: { ...rfq.toObject({ getters: true }), id: rfq._id }
     });
   } catch (error) {
     res.status(500).json({ 
@@ -130,7 +184,7 @@ exports.updateRFQ = async (req, res) => {
     res.json({
       success: true,
       message: 'RFQ updated successfully',
-      rfq
+      rfq: { ...rfq.toObject({ getters: true }), id: rfq._id }
     });
   } catch (error) {
     res.status(500).json({ 
@@ -252,6 +306,25 @@ exports.selectSupplier = async (req, res) => {
     quote.status = 'accepted';
     await quote.save();
 
+    // Create notification for Provider
+    const notification = await Notification.create({
+      userId: quote.providerId,
+      type: 'offer_accepted',
+      title: 'Quote Accepted!',
+      message: `${req.user.firstName} accepted your quote for RFQ: ${rfq.title}`,
+      senderId: req.user._id,
+      senderName: `${req.user.firstName} ${req.user.lastName}`,
+      metadata: {
+        offerId: quote._id,
+        requestId: rfq._id
+      }
+    });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(quote.providerId.toString()).emit('newNotification', notification);
+    }
+
     // Create order (you'll implement this in orderController)
     // const order = await createOrder(rfq, quote);
 
@@ -316,7 +389,8 @@ exports.getRFQMarket = async (req, res) => {
       const matchScore = calculateMatchScore(providerSkills, rfq.skills);
       
       return {
-        ...rfq.toObject(),
+        ...rfq.toObject({ getters: true }),
+        id: rfq._id,
         matchScore,
         alreadyQuoted
       };
@@ -361,7 +435,7 @@ exports.getProviderRFQView = async (req, res) => {
 
     res.json({
       success: true,
-      rfq,
+      rfq: { ...rfq.toObject({ getters: true }), id: rfq._id },
       hasQuoted: !!existingQuote
     });
   } catch (error) {

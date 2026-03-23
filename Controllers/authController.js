@@ -3,6 +3,7 @@ const User = require('../Models/User');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
+const sendEmail = require('../utils/sendEmail');
 
 // @desc    Register a new client
 // @route   POST /api/auth/register/client
@@ -11,17 +12,40 @@ exports.registerClient = async (req, res) => {
   try {
     const { email, password, firstName, lastName, phone, companyName, jobTitle, country } = req.body;
 
-    // Check if user exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ 
+    // Basic validation to ensure correct endpoint is being used
+    if (!email || !password || !firstName || !lastName || !companyName) {
+      return res.status(400).json({
         success: false,
-        message: 'Email already registered' 
+        message: 'Missing required fields for client registration. Please ensure you are using the correct registration form.'
       });
     }
 
+    // Check if user exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already registered'
+      });
+    }
+
+    // Generate email verification token
+    const verificationToken = crypto.randomBytes(20).toString('hex');
+    const emailVerificationToken = crypto
+      .createHash('sha256')
+      .update(verificationToken)
+      .digest('hex');
+
+    // Set token expiry (e.g., 24 hours)
+    const emailVerificationTokenExpire = Date.now() + 24 * 60 * 60 * 1000;
+
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    let hashedPassword;
+    try {
+      hashedPassword = await bcrypt.hash(password, 10);
+    } catch (error) {
+      throw new Error("Password hashing failed: " + error.message)
+    }
 
     // Create user
     const user = new User({
@@ -37,21 +61,44 @@ exports.registerClient = async (req, res) => {
         companyName,
         jobTitle
       },
-      emailVerified: false
+      emailVerified: false,
+      emailVerificationToken,
+      emailVerificationTokenExpire
     });
 
     await user.save();
 
+    // Create verification URL
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+    const message = `Thank you for registering! Please click the link below to verify your email address:\n\n${verificationUrl}\n\nIf you did not create an account, please ignore this email.`;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'SkillSwapp - Email Verification',
+        message,
+      });
+    } catch (err) {
+      console.error('Email sending error during client registration (non-fatal):', err);
+      // We don't fail the registration if the email fails to send.
+      // A "resend verification" feature would be useful here.
+    }
+
     // Generate JWT
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    let token;
+    try {
+      token = jwt.sign(
+        { userId: user._id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+    } catch (error) {
+      throw new Error("JWT signing failed: " + error.message);
+    }
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful',
+      message: 'Registration successful. Please check your email to verify your account.',
       token,
       user: {
         id: user._id,
@@ -59,15 +106,16 @@ exports.registerClient = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        status: user.status
+        status: user.status,
+        emailVerified: user.emailVerified
       }
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ 
+    console.error('Client registration error:', error);
+    res.status(500).json({
       success: false,
-      message: 'Registration failed', 
-      error: error.message 
+      message: 'Client registration failed due to a server error.',
+      error: error.message
     });
   }
 };
@@ -77,23 +125,56 @@ exports.registerClient = async (req, res) => {
 // @access  Public
 exports.registerProvider = async (req, res) => {
   try {
-    const { 
+    const {
       email, password, firstName, lastName, phone, country,
-      businessName, yearsExperience, specialization, skills, 
+      businessName, yearsExperience, specialization, skills,
       hourlyRate, minimumProjectSize, portfolioUrl, linkedinUrl, githubUrl
     } = req.body;
+
+    // Basic validation to ensure correct endpoint is being used
+    if (!email || !password || !firstName || !lastName || !businessName || !specialization) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields for provider application. Please ensure you are using the correct registration form.'
+      });
+    }
 
     // Check if user exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'Email already registered' 
+        message: 'Email already registered'
       });
     }
 
+    // Generate email verification token
+    const verificationToken = crypto.randomBytes(20).toString('hex');
+    const emailVerificationToken = crypto
+      .createHash('sha256')
+      .update(verificationToken)
+      .digest('hex');
+
+    // Set token expiry (e.g., 24 hours)
+    const emailVerificationTokenExpire = Date.now() + 24 * 60 * 60 * 1000;
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Normalize skills to an array of trimmed strings
+    let normalizedSkills = [];
+    if (Array.isArray(skills)) {
+      normalizedSkills = skills
+        .map(s => (typeof s === 'string' ? s.trim() : String(s).trim()))
+        .filter(Boolean);
+    } else if (typeof skills === 'string') {
+      normalizedSkills = skills
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+    } else if (skills != null) {
+      normalizedSkills = [String(skills).trim()].filter(Boolean);
+    }
 
     // Create user (pending approval)
     const user = new User({
@@ -107,11 +188,11 @@ exports.registerProvider = async (req, res) => {
       status: 'pending',
       providerDetails: {
         businessName,
-        yearsExperience: parseInt(yearsExperience),
+        yearsExperience: yearsExperience ? parseInt(yearsExperience, 10) : null,
         specialization,
-        skills: skills ? skills.split(',').map(s => s.trim()) : [],
-        hourlyRate: hourlyRate ? parseInt(hourlyRate) : null,
-        minimumProjectSize: minimumProjectSize ? parseInt(minimumProjectSize) : null,
+        skills: normalizedSkills,
+        hourlyRate: hourlyRate ? parseInt(hourlyRate, 10) : null,
+        minimumProjectSize: minimumProjectSize ? parseInt(minimumProjectSize, 10) : null,
         portfolioUrl,
         linkedinUrl,
         githubUrl
@@ -122,14 +203,31 @@ exports.registerProvider = async (req, res) => {
         serviceLimit: 3,
         rfqQuota: 10
       },
-      emailVerified: false
+      emailVerified: false,
+      emailVerificationToken,
+      emailVerificationTokenExpire
     });
 
     await user.save();
 
+    // Create verification URL
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+    const message = `Thank you for applying! Please click the link below to verify your email address while we review your application:\n\n${verificationUrl}\n\nIf you did not create an account, please ignore this email.`;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'SkillSwapp - Verify Your Email',
+        message,
+      });
+    } catch (err) {
+      console.error('Email sending error during provider registration (non-fatal):', err);
+      // We don't fail the registration if the email fails to send.
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Application submitted successfully',
+      message: 'Application submitted successfully. Please check your email to verify your account.',
       user: {
         id: user._id,
         email: user.email,
@@ -141,10 +239,10 @@ exports.registerProvider = async (req, res) => {
     });
   } catch (error) {
     console.error('Provider registration error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Application failed', 
-      error: error.message 
+      message: 'Provider application failed due to a server error.',
+      error: error.message
     });
   }
 };
@@ -159,26 +257,30 @@ exports.login = async (req, res) => {
     // Find user
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        message: 'Invalid email or password' 
+        message: 'Invalid email or password'
       });
     }
 
     // Check password
-    const isValid = await bcrypt.compare(password, user.password);
+    let isValid;
+    try {
+      isValid = await bcrypt.compare(password, user.password);
+    } catch (error) { throw new Error("Password comparison failed: " + error.message) }
+
     if (!isValid) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        message: 'Invalid email or password' 
+        message: 'Invalid email or password'
       });
     }
 
     // Check status
     if (user.status === 'suspended') {
-      return res.status(403).json({ 
+      return res.status(403).json({
         success: false,
-        message: 'Account suspended' 
+        message: 'Account suspended'
       });
     }
 
@@ -211,6 +313,8 @@ exports.login = async (req, res) => {
       userData.clientDetails = user.clientDetails;
     }
 
+    // Add redirectUrl to the user data payload
+    userData.redirectUrl = user.role === 'admin' ? '/admin' : '/';
     res.json({
       success: true,
       message: 'Login successful',
@@ -219,10 +323,10 @@ exports.login = async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Login failed', 
-      error: error.message 
+      message: 'Login failed',
+      error: error.message
     });
   }
 };
@@ -232,15 +336,15 @@ exports.login = async (req, res) => {
 // @access  Private
 exports.logout = async (req, res) => {
   try {
-    res.json({ 
+    res.json({
       success: true,
-      message: 'Logged out successfully' 
+      message: 'Logged out successfully'
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Logout failed', 
-      error: error.message 
+      message: 'Logout failed',
+      error: error.message
     });
   }
 };
@@ -251,7 +355,7 @@ exports.logout = async (req, res) => {
 exports.refreshToken = async (req, res) => {
   try {
     const user = req.user;
-    
+
     const token = jwt.sign(
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET,
@@ -263,10 +367,10 @@ exports.refreshToken = async (req, res) => {
       token
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Token refresh failed', 
-      error: error.message 
+      message: 'Token refresh failed',
+      error: error.message
     });
   }
 };
@@ -280,24 +384,53 @@ exports.forgotPassword = async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'User not found' 
+        message: 'User not found'
       });
     }
 
-    // Generate reset token (you'd save this to user)
-    const resetToken = crypto.randomBytes(32).toString('hex');
+    // Generate reset token
+    const resetToken = crypto.randomBytes(20).toString('hex');
 
-    res.json({ 
-      success: true,
-      message: 'Password reset email sent' 
-    });
+    // Hash token and set to resetPasswordToken field
+    user.resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+
+    // Set expire (10 minutes)
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+
+    await user.save({ validateBeforeSave: false });
+
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+    const message = `You are receiving this email because you (or someone else) has requested the reset of a password.\n\nPlease click on the following link to reset your password:\n\n${resetUrl}`;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Password Reset Token',
+        message
+      });
+
+      res.status(200).json({ success: true, data: 'Email sent' });
+    } catch (err) {
+      console.error(err);
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+
+      await user.save({ validateBeforeSave: false });
+
+      return res.status(500).json({ success: false, message: 'Email could not be sent' });
+    }
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to send reset email', 
-      error: error.message 
+      message: 'Failed to send reset email',
+      error: error.message
     });
   }
 };
@@ -309,22 +442,41 @@ exports.resetPassword = async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
-    // Find user by reset token and update password
-    // const user = await User.findOne({ resetToken: token });
-    // user.password = hashedPassword;
-    // await user.save();
+    // Get hashed token
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
 
-    res.json({ 
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid token' });
+    }
+
+    let hashedPassword;
+    try {
+      hashedPassword = await bcrypt.hash(newPassword, 10);
+    } catch (error) { throw new Error("Password hashing failed: " + error.message) }
+
+
+    user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    res.json({
       success: true,
-      message: 'Password reset successful' 
+      message: 'Password reset successful'
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Password reset failed', 
-      error: error.message 
+      message: 'Password reset failed',
+      error: error.message
     });
   }
 };
@@ -336,20 +488,38 @@ exports.verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
 
-    // Find user by token and update
-    // const user = await User.findOne({ emailVerificationToken: token });
-    // user.emailVerified = true;
-    // await user.save();
+    // Hash the incoming token to match the one in the database
+    const emailVerificationToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
 
-    res.json({ 
+    // Find user by token that is not expired
+    const user = await User.findOne({
+      emailVerificationToken,
+      emailVerificationTokenExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification token.' });
+    }
+
+    // Update user to be verified
+    user.emailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationTokenExpire = undefined;
+    await user.save();
+
+    res.json({
       success: true,
-      message: 'Email verified successfully' 
+      message: 'Email verified successfully'
     });
   } catch (error) {
-    res.status(500).json({ 
+    console.error('Email verification error:', error);
+    res.status(500).json({
       success: false,
-      message: 'Email verification failed', 
-      error: error.message 
+      message: 'Email verification failed',
+      error: error.message
     });
   }
 };

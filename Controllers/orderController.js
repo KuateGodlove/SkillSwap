@@ -7,6 +7,73 @@ const Payment = require('../Models/Payment');
 const Message = require('../Models/Message');
 const Notification = require('../Models/Notification');
 
+// @desc    Start/Get inquiry for a service
+// @route   POST /api/orders/inquire/:serviceId
+// @access  Private (Client only)
+exports.inquireService = async (req, res) => {
+  try {
+    const { serviceId } = req.params;
+    const Service = require('../Models/Service'); // Inline require if not imported
+
+    const service = await Service.findById(serviceId);
+    if (!service) {
+      return res.status(404).json({ success: false, message: 'Service not found' });
+    }
+
+    // Check for existing pending order for this user and service
+    let order = await Order.findOne({
+      clientId: req.user._id,
+      serviceId: serviceId,
+      status: 'pending'
+    });
+
+    if (order) {
+      return res.json({ success: true, order });
+    }
+
+    // Create new inquiry (pending order)
+    order = new Order({
+      serviceId,
+      clientId: req.user._id,
+      providerId: service.providerId,
+      title: service.title,
+      description: service.description,
+      amount: service.price || 0,
+      status: 'pending',
+      startDate: new Date()
+    });
+
+    await order.save();
+
+    // Create notification for Provider
+    const notification = await Notification.create({
+      userId: service.providerId,
+      type: 'order_started', // or 'offer_received'
+      title: 'New Service Inquiry',
+      message: `${req.user.firstName} is inquiring about your service: ${service.title}`,
+      senderId: req.user._id,
+      senderName: `${req.user.firstName} ${req.user.lastName}`,
+      metadata: {
+        orderId: order._id
+      }
+    });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(service.providerId.toString()).emit('newNotification', notification);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Inquiry started successfully',
+      order
+    });
+  } catch (error) {
+    console.error('Inquire service error:', error);
+    res.status(500).json({ success: false, message: 'Failed to start inquiry' });
+  }
+};
+
 // ==================== CLIENT ORDER ROUTES ====================
 
 // @desc    Get client's orders
@@ -265,7 +332,7 @@ exports.createOrderFromQuote = async (req, res) => {
     });
 
     // Create notification for provider
-    await Notification.create({
+    const notification = await Notification.create({
       userId: quote.providerId._id,
       type: 'order_started',
       title: 'New Project Started',
@@ -274,6 +341,11 @@ exports.createOrderFromQuote = async (req, res) => {
       link: `/provider/orders/${order._id}`,
       priority: 'high'
     });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(quote.providerId._id.toString()).emit('newNotification', notification);
+    }
 
     res.status(201).json({
       success: true,
@@ -344,7 +416,7 @@ exports.updateOrderStatus = async (req, res) => {
 
     // Create notification for the other party
     const notifyUserId = isClient ? order.providerId : order.clientId;
-    await Notification.create({
+    const notification = await Notification.create({
       userId: notifyUserId,
       type: 'order_status_change',
       title: 'Order Status Updated',
@@ -353,6 +425,11 @@ exports.updateOrderStatus = async (req, res) => {
       link: isClient ? `/provider/orders/${order._id}` : `/client/orders/${order._id}`,
       priority: 'medium'
     });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(notifyUserId.toString()).emit('newNotification', notification);
+    }
 
     res.json({
       success: true,
@@ -475,7 +552,7 @@ exports.addMilestone = async (req, res) => {
     await order.save();
 
     // Notify client
-    await Notification.create({
+    const milestoneNotification = await Notification.create({
       userId: order.clientId,
       type: 'milestone_added',
       title: 'New Milestone Added',
@@ -484,6 +561,11 @@ exports.addMilestone = async (req, res) => {
       link: `/client/orders/${order._id}`,
       priority: 'medium'
     });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(order.clientId.toString()).emit('newNotification', milestoneNotification);
+    }
 
     res.status(201).json({
       success: true,
@@ -617,7 +699,7 @@ exports.completeMilestone = async (req, res) => {
     }
 
     // Notify client
-    await Notification.create({
+    const compNotification = await Notification.create({
       userId: order.clientId,
       type: 'milestone_completed',
       title: 'Milestone Completed',
@@ -626,6 +708,11 @@ exports.completeMilestone = async (req, res) => {
       link: `/client/orders/${order._id}`,
       priority: 'high'
     });
+
+    const ioInstance = req.app.get('io');
+    if (ioInstance) {
+      ioInstance.to(order.clientId.toString()).emit('newNotification', compNotification);
+    }
 
     res.json({
       success: true,
@@ -726,7 +813,7 @@ exports.approveMilestone = async (req, res) => {
     }
 
     // Notify provider
-    await Notification.create({
+    const appNotification = await Notification.create({
       userId: order.providerId,
       type: 'milestone_approved',
       title: 'Milestone Approved',
@@ -735,6 +822,11 @@ exports.approveMilestone = async (req, res) => {
       link: `/provider/orders/${order._id}`,
       priority: 'high'
     });
+
+    const ioApp = req.app.get('io');
+    if (ioApp) {
+      ioApp.to(order.providerId.toString()).emit('newNotification', appNotification);
+    }
 
     res.json({
       success: true,
@@ -800,7 +892,7 @@ exports.requestRevision = async (req, res) => {
     await order.save();
 
     // Notify provider
-    await Notification.create({
+    const revNotification = await Notification.create({
       userId: order.providerId,
       type: 'revision_requested',
       title: 'Revision Requested',
@@ -809,6 +901,11 @@ exports.requestRevision = async (req, res) => {
       link: `/provider/orders/${order._id}`,
       priority: 'high'
     });
+
+    const ioRev = req.app.get('io');
+    if (ioRev) {
+      ioRev.to(order.providerId.toString()).emit('newNotification', revNotification);
+    }
 
     res.json({
       success: true,
@@ -1003,8 +1100,7 @@ exports.raiseDispute = async (req, res) => {
     console.log('Dispute raised:', order.dispute);
 
     // Notify the other party
-    const notifyUserId = isClient ? order.providerId : order.clientId;
-    await Notification.create({
+    const dispNotification = await Notification.create({
       userId: notifyUserId,
       type: 'dispute_raised',
       title: 'Dispute Raised',
@@ -1013,6 +1109,11 @@ exports.raiseDispute = async (req, res) => {
       link: isClient ? `/provider/orders/${order._id}` : `/client/orders/${order._id}`,
       priority: 'high'
     });
+
+    const ioDisp = req.app.get('io');
+    if (ioDisp) {
+      ioDisp.to(notifyUserId.toString()).emit('newNotification', dispNotification);
+    }
 
     res.json({
       success: true,
@@ -1380,8 +1481,17 @@ exports.sendMessage = async (req, res) => {
     await message.save();
     await message.populate('senderId', 'firstName lastName avatar');
 
+    // Emit socket event for real-time update
+    const io = req.app.get('io');
+    if (io) {
+      io.to(orderId).emit('receiveMessage', {
+        ...message.toObject(),
+        orderId: orderId // Ensure orderId is explicitly sent for the frontend filter
+      });
+    }
+
     // Create notification for receiver
-    await Notification.create({
+    const msgNotification = await Notification.create({
       userId: receiverId,
       type: 'message_received',
       title: 'New Message',
@@ -1393,6 +1503,10 @@ exports.sendMessage = async (req, res) => {
         conversationId: orderId
       }
     });
+
+    if (io) {
+      io.to(receiverId.toString()).emit('newNotification', msgNotification);
+    }
 
     res.status(201).json({
       success: true,

@@ -171,7 +171,7 @@ exports.getPublicProfile = async (req, res) => {
       _id: providerId,
       role: 'provider',
       status: 'approved'
-    }).select('firstName lastName providerDetails membership.tier createdAt');
+    }).select('firstName lastName avatar providerDetails membership.tier createdAt');
 
     if (!provider) {
       return res.status(404).json({ 

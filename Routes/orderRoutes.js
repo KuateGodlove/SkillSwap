@@ -9,6 +9,7 @@ router.use(authenticate);
 
 // Client routes
 router.get('/client', orderController.getClientOrders);
+router.post('/inquire/:serviceId', orderController.inquireService);
 
 // Provider routes
 router.get('/provider', orderController.getProviderOrders);

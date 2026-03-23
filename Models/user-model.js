@@ -59,6 +59,12 @@ const userSchema = new mongoose.Schema({
     memberSince: Date
   },
   
+  // Saved Providers (for clients)
+  savedProviders: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User' 
+  }],
+  
   // Client specific (if role = client)
   clientDetails: {
     companyName: String,

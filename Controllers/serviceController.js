@@ -11,14 +11,25 @@ exports.getServices = async (req, res) => {
 
     const filter = { status: 'active' };
 
-    if (category) filter.category = category;
-    if (minPrice || maxPrice) {
-      filter.price = {};
-      if (minPrice) filter.price.$gte = parseInt(minPrice);
-      if (maxPrice) filter.price.$lte = parseInt(maxPrice);
+    if (category && category !== 'undefined' && category !== 'All') {
+      filter.category = category;
     }
-    if (search) {
-      filter.$text = { $search: search };
+
+    const hasMinPrice = minPrice && !isNaN(parseInt(minPrice));
+    const hasMaxPrice = maxPrice && !isNaN(parseInt(maxPrice));
+
+    if (hasMinPrice || hasMaxPrice) {
+      filter.price = {};
+      if (hasMinPrice) filter.price.$gte = parseInt(minPrice);
+      if (hasMaxPrice) filter.price.$lte = parseInt(maxPrice);
+    }
+
+    if (search && search.trim() !== '') {
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { category: { $regex: search, $options: 'i' } }
+      ];
     }
 
     const services = await Service.find(filter)
@@ -30,10 +41,11 @@ exports.getServices = async (req, res) => {
       services
     });
   } catch (error) {
-    res.status(500).json({ 
+    console.error('❌ getServices error:', error);
+    res.status(500).json({
       success: false,
-      message: 'Failed to fetch services', 
-      error: error.message 
+      message: 'Failed to fetch services',
+      error: error.message
     });
   }
 };
@@ -49,9 +61,9 @@ exports.getServiceDetails = async (req, res) => {
       .populate('providerId', 'firstName lastName providerDetails rating memberSince');
 
     if (!service) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Service not found' 
+        message: 'Service not found'
       });
     }
 
@@ -64,10 +76,10 @@ exports.getServiceDetails = async (req, res) => {
       service
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to fetch service', 
-      error: error.message 
+      message: 'Failed to fetch service',
+      error: error.message
     });
   }
 };
@@ -79,15 +91,18 @@ exports.createService = async (req, res) => {
   try {
     // Check service limit based on membership
     const provider = await User.findById(req.user._id);
-    const servicesCount = await Service.countDocuments({ 
+    const servicesCount = await Service.countDocuments({
       providerId: req.user._id,
       status: 'active'
     });
 
-    if (servicesCount >= provider.membership.serviceLimit) {
-      return res.status(400).json({ 
+    // Safety check for membership data
+    const serviceLimit = provider.membership?.serviceLimit ?? 3;
+
+    if (servicesCount >= serviceLimit) {
+      return res.status(400).json({
         success: false,
-        message: `Service limit reached (${provider.membership.serviceLimit}). Please upgrade your membership.` 
+        message: `Service limit reached (${serviceLimit}). Please upgrade your membership.`
       });
     }
 
@@ -105,10 +120,10 @@ exports.createService = async (req, res) => {
     });
   } catch (error) {
     console.error('Create service error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to create service', 
-      error: error.message 
+      message: 'Failed to create service',
+      error: error.message
     });
   }
 };
@@ -126,10 +141,10 @@ exports.getMyServices = async (req, res) => {
       services
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to fetch services', 
-      error: error.message 
+      message: 'Failed to fetch services',
+      error: error.message
     });
   }
 };
@@ -148,9 +163,9 @@ exports.updateService = async (req, res) => {
     );
 
     if (!service) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Service not found or unauthorized' 
+        message: 'Service not found or unauthorized'
       });
     }
 
@@ -160,10 +175,10 @@ exports.updateService = async (req, res) => {
       service
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to update service', 
-      error: error.message 
+      message: 'Failed to update service',
+      error: error.message
     });
   }
 };
@@ -181,9 +196,9 @@ exports.deleteService = async (req, res) => {
     });
 
     if (!service) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Service not found or unauthorized' 
+        message: 'Service not found or unauthorized'
       });
     }
 
@@ -192,10 +207,10 @@ exports.deleteService = async (req, res) => {
       message: 'Service deleted successfully'
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to delete service', 
-      error: error.message 
+      message: 'Failed to delete service',
+      error: error.message
     });
   }
 };
@@ -213,23 +228,25 @@ exports.duplicateService = async (req, res) => {
     });
 
     if (!original) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Service not found' 
+        message: 'Service not found'
       });
     }
 
     // Check service limit
     const provider = await User.findById(req.user._id);
-    const servicesCount = await Service.countDocuments({ 
+    const servicesCount = await Service.countDocuments({
       providerId: req.user._id,
       status: 'active'
     });
 
-    if (servicesCount >= provider.membership.serviceLimit) {
-      return res.status(400).json({ 
+    const serviceLimit = provider.membership?.serviceLimit ?? 3;
+
+    if (servicesCount >= serviceLimit) {
+      return res.status(400).json({
         success: false,
-        message: `Service limit reached (${provider.membership.serviceLimit}). Please upgrade your membership.` 
+        message: `Service limit reached (${serviceLimit}). Please upgrade your membership.`
       });
     }
 
@@ -254,10 +271,10 @@ exports.duplicateService = async (req, res) => {
       service: duplicate
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to duplicate service', 
-      error: error.message 
+      message: 'Failed to duplicate service',
+      error: error.message
     });
   }
 };
@@ -277,9 +294,9 @@ exports.updateStatus = async (req, res) => {
     );
 
     if (!service) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Service not found' 
+        message: 'Service not found'
       });
     }
 
@@ -289,10 +306,10 @@ exports.updateStatus = async (req, res) => {
       service
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to update status', 
-      error: error.message 
+      message: 'Failed to update status',
+      error: error.message
     });
   }
 };

@@ -4,7 +4,7 @@ const Service = require('../Models/Service');
 const Order = require('../Models/Order');
 const RFQ = require('../Models/RFQ');
 const Quote = require('../Models/Quote');
-const Payment = require('../Models/Payment');
+const Payment = require('../Models/Payment'); // Ensure this points to the new Payment.js model
 
 // @desc    Get pending providers awaiting approval
 // @route   GET /api/admin/providers/pending
@@ -17,19 +17,28 @@ exports.getPendingProviders = async (req, res) => {
       role: 'provider',
       status: 'pending'
     })
-    .select('-password')
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(parseInt(limit));
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
 
     const total = await User.countDocuments({
       role: 'provider',
       status: 'pending'
     });
 
+    const normalizedProviders = providers.map(p => {
+      const obj = p.toObject({ getters: true });
+      return {
+        ...obj,
+        id: obj._id,
+        specialization: obj.providerDetails?.specialization || obj.specialization
+      };
+    });
+
     res.json({
       success: true,
-      providers,
+      providers: normalizedProviders,
       pagination: {
         total,
         page: parseInt(page),
@@ -42,6 +51,69 @@ exports.getPendingProviders = async (req, res) => {
       message: 'Failed to fetch pending providers',
       error: error.message
     });
+  }
+};
+
+// @desc    Get all transactions (for admin)
+// @route   GET /api/admin/transactions
+// @access  Private (Admin only)
+exports.getAllTransactions = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status, type, search } = req.query;
+
+    const query = {};
+    if (status) query.status = status;
+    if (type) query.type = type;
+
+    // If a search term is provided, find matching user IDs first
+    if (search) {
+      const userQuery = {
+        $or: [
+          { firstName: { $regex: search, $options: 'i' } },
+          { lastName: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+        ],
+      };
+      const users = await User.find(userQuery).select('_id');
+      query.userId = { $in: users.map(u => u._id) };
+    }
+
+    const transactions = await Payment.find(query)
+      .populate('userId', 'firstName lastName email')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await Payment.countDocuments(query);
+
+    const normalizedTransactions = transactions.map(tx => {
+      const obj = tx.toObject({ getters: true });
+      const userName = obj.userId ? `${obj.userId.firstName || ''} ${obj.userId.lastName || ''}`.trim() : '';
+      return {
+        ...obj,
+        id: obj._id,
+        user: obj.userId
+          ? {
+              id: obj.userId._id,
+              name: userName || obj.userId.email,
+              email: obj.userId.email
+            }
+          : null
+      };
+    });
+
+    res.json({
+      success: true,
+      transactions: normalizedTransactions,
+      history: normalizedTransactions,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch transactions', error: error.message });
   }
 };
 
@@ -65,10 +137,17 @@ exports.approveProvider = async (req, res) => {
       });
     }
 
+    const providerObj = provider.toObject({ getters: true });
+    const normalizedProvider = {
+      ...providerObj,
+      id: providerObj._id,
+      specialization: providerObj.providerDetails?.specialization || providerObj.specialization
+    };
+
     res.json({
       success: true,
       message: 'Provider approved successfully',
-      provider
+      provider: normalizedProvider
     });
   } catch (error) {
     res.status(500).json({
@@ -89,7 +168,7 @@ exports.rejectProvider = async (req, res) => {
 
     const provider = await User.findByIdAndUpdate(
       providerId,
-      { 
+      {
         status: 'rejected',
         rejectionReason: reason
       },
@@ -103,10 +182,17 @@ exports.rejectProvider = async (req, res) => {
       });
     }
 
+    const providerObj = provider.toObject({ getters: true });
+    const normalizedProvider = {
+      ...providerObj,
+      id: providerObj._id,
+      specialization: providerObj.providerDetails?.specialization || providerObj.specialization
+    };
+
     res.json({
       success: true,
       message: 'Provider rejected successfully',
-      provider
+      provider: normalizedProvider
     });
   } catch (error) {
     res.status(500).json({
@@ -213,6 +299,23 @@ exports.getPlatformStats = async (req, res) => {
 
     const totalRevenue = payments[0]?.total || 0;
 
+    // Monthly revenue (current calendar month)
+    const now = new Date();
+    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+    const startOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+
+    const monthlyPayments = await Payment.aggregate([
+      {
+        $match: {
+          status: 'completed',
+          createdAt: { $gte: startOfMonth, $lt: startOfNextMonth }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+
+    const monthlyRevenue = monthlyPayments[0]?.total || 0;
+
     res.json({
       success: true,
       stats: {
@@ -237,7 +340,11 @@ exports.getPlatformStats = async (req, res) => {
           active: activeServices
         },
         revenue: totalRevenue
-      }
+      },
+      totalUsers,
+      pendingProviders,
+      activeProjects: activeOrders,
+      monthlyRevenue
     });
   } catch (error) {
     res.status(500).json({
