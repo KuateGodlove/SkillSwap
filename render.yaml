@@ -9,3 +9,27 @@ services:
         value: production
       - key: PORT
         value: 10000
+
+// Name	Email Address	Expertise
+Alice Smith	alice_smith@skill.com	Logo Design 🎨
+Bob Johnson	bob_johnson@skill.com	App Development 📱
+Charlie Brown	charlie_brown@skill.com	SEO Audit 🔍
+David Wilson	david_wilson@skill.com	Video Editing 🎬
+Eva Davis	eva_davis@skill.com	Logo Design 🎨
+Frank Miller	frank_miller@skill.com	App Development 📱
+Grace Lee	grace_lee@skill.com	SEO Audit 🔍
+Hank Green	hank_green@skill.com	Video Editing 🎬
+Ivy Chen	ivy_chen@skill.com	Logo Design 🎨
+Jack White	jack_white@skill.com	App Development 📱
+💼 Top 10 Clients (Buyers)
+Name	Email Address	Needs
+Kevin Hart	kevin_hart@skill.com	Marketing Strategy 📈
+Linda Ross	linda_ross@skill.com	Social Media Help 📱
+Mike Dean	mike_dean@skill.com	Custom Website 💻
+Nina Patel	nina_patel@skill.com	Marketing Strategy 📈
+Oscar King	oscar_king@skill.com	Social Media Help 📱
+Paula Young	paula_young@skill.com	Custom Website 💻
+Quinn Gray	quinn_gray@skill.com	Marketing Strategy 📈
+Riley Scott	riley_scott@skill.com	Social Media Help 📱
+Sarah Adams	sarah_adams@skill.com	Custom Website 💻
+Tom Baker	tom_barker@skill.com	Marketing Strategy 📈

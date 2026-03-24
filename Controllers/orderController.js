@@ -989,6 +989,20 @@ exports.uploadDeliverable = async (req, res) => {
       message: 'Deliverable uploaded successfully',
       deliverable
     });
+
+    // Notify client
+    const notification = await Notification.create({
+      userId: order.clientId,
+      type: 'milestone_completed',
+      title: 'Deliverable Uploaded',
+      message: `${req.user.firstName} has uploaded a deliverable for milestone: ${milestone.title}`,
+      metadata: { orderId: order._id, milestoneId: milestone._id }
+    });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(order.clientId.toString()).emit('newNotification', notification);
+    }
   } catch (error) {
     console.error('Upload deliverable error:', error);
     res.status(500).json({ 

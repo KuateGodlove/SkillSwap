@@ -325,13 +325,42 @@ exports.selectSupplier = async (req, res) => {
       io.to(quote.providerId.toString()).emit('newNotification', notification);
     }
 
-    // Create order (you'll implement this in orderController)
-    // const order = await createOrder(rfq, quote);
+    // Create Order from RFQ and Quote
+    const Order = require('../Models/Order');
+    const order = new Order({
+      rfqId: rfq._id,
+      quoteId: quote._id,
+      clientId: req.user._id,
+      providerId: quote.providerId,
+      title: rfq.title,
+      description: rfq.description,
+      amount: quote.amount,
+      status: 'pending',
+      startDate: new Date(),
+      milestones: [
+        {
+          title: 'Initial Deliverable',
+          description: 'Kickoff and first set of requirements',
+          amount: quote.amount * 0.3,
+          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          status: 'pending'
+        },
+        {
+          title: 'Final Delivery',
+          description: 'Project completion and source files',
+          amount: quote.amount * 0.7,
+          dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          status: 'pending'
+        }
+      ]
+    });
+
+    await order.save();
 
     res.json({
       success: true,
-      message: 'Supplier selected successfully',
-      // order
+      message: 'Supplier selected and order created successfully',
+      order
     });
   } catch (error) {
     res.status(500).json({ 

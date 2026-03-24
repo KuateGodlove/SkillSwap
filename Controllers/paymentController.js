@@ -100,10 +100,25 @@ exports.confirmPayment = async (req, res) => {
 
     // Update order payment status
     if (payment.orderId) {
-      await Order.findByIdAndUpdate(
+      const order = await Order.findByIdAndUpdate(
         payment.orderId,
-        { paymentStatus: 'completed' }
+        { paymentStatus: 'completed' },
+        { new: true }
       );
+
+      // Create notification for provider
+      const notification = await Notification.create({
+        userId: order.providerId,
+        type: 'payment_received',
+        title: 'Payment Confirmed',
+        message: `Your client ${req.user.firstName} has confirmed payment of ${payment.amount.toLocaleString()} XAF for the project: ${order.title}`,
+        metadata: { orderId: order._id, paymentId: payment._id }
+      });
+
+      const io = req.app.get('io');
+      if (io) {
+        io.to(order.providerId.toString()).emit('newNotification', notification);
+      }
     }
 
     res.json({

@@ -131,6 +131,9 @@ exports.sendOrderMessage = async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
+      const obj = message.toObject({ getters: true });
+      const broadcastData = { ...obj, id: obj._id, orderId };
+      io.to(orderId).emit('receiveMessage', broadcastData);
       io.to(receiverId.toString()).emit('newNotification', notification);
     }
 
