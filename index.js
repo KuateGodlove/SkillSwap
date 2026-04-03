@@ -174,9 +174,11 @@ app.use((err, req, res, next) => {
 });
 
 // ==================== DATABASE CONNECTION ====================
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/skillswapp')
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/skillswapp';
+
+mongoose.connect(MONGODB_URI)
   .then(() => {
-    console.log('✅ Connected to MongoDB');
+    console.log(`✅ Connected to Local MongoDB: ${MONGODB_URI}`);
 
     // Start server
     const PORT = process.env.PORT || 5000;

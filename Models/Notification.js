@@ -23,7 +23,12 @@ const notificationSchema = new mongoose.Schema({
       'review_received',      // When you receive a review
       'system_alert',         // System alerts
       'deadline_reminder',    // Deadline reminders
-      'skill_match'           // Skill matching notifications
+      'skill_match',          // Skill matching notifications
+      'order_status_change',  // When order status changes
+      'milestone_added',      // When a new milestone is added
+      'milestone_completed',  // When a provider completes a milestone
+      'milestone_approved',   // When a client approves a milestone
+      'revision_requested'    // When a client requests a revision
     ],
     index: true
   },

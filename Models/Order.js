@@ -55,7 +55,7 @@ const orderSchema = new mongoose.Schema({
   progress: { type: Number, default: 0 },
   status: {
     type: String,
-    enum: ['pending', 'in-progress', 'review', 'completed', 'cancelled'],
+    enum: ['pending', 'in-progress', 'review', 'completed', 'cancelled', 'disputed'],
     default: 'pending'
   },
   
@@ -72,6 +72,16 @@ const orderSchema = new mongoose.Schema({
   },
   escrowBalance: { type: Number, default: 0 },
   totalPaid: { type: Number, default: 0 },
+  paymentSchedule: [{
+    milestoneId: mongoose.Schema.Types.ObjectId,
+    amount: Number,
+    status: {
+      type: String,
+      enum: ['pending', 'paid', 'refunded'],
+      default: 'pending'
+    },
+    paidAt: Date
+  }],
   
   // Tracking
   lastActivity: Date,

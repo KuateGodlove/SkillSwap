@@ -41,16 +41,16 @@ exports.createProject = async (req, res) => {
 
     const normalizedBudgetRange = budgetRange
       ? {
-          min: budgetRange.min !== undefined ? Number(budgetRange.min) : undefined,
-          max: budgetRange.max !== undefined ? Number(budgetRange.max) : undefined,
-          currency: budgetRange.currency || 'USD'
-        }
+        min: budgetRange.min !== undefined ? Number(budgetRange.min) : undefined,
+        max: budgetRange.max !== undefined ? Number(budgetRange.max) : undefined,
+        currency: budgetRange.currency || 'USD'
+      }
       : (minBudget || maxBudget)
         ? {
-            min: minBudget !== undefined ? Number(minBudget) : undefined,
-            max: maxBudget !== undefined ? Number(maxBudget) : undefined,
-            currency: 'USD'
-          }
+          min: minBudget !== undefined ? Number(minBudget) : undefined,
+          max: maxBudget !== undefined ? Number(maxBudget) : undefined,
+          currency: 'USD'
+        }
         : undefined;
 
     const project = await Project.create({
@@ -173,8 +173,10 @@ exports.browseServices = async (req, res) => {
 
     const skip = (page - 1) * limit;
     const searchQuery = {
-      isActive: true,
-      isVerified: true
+      $or: [
+        { isActive: true, isVerified: true },
+        { isActive: { $exists: false } } // Fallback for older records
+      ]
     };
 
     if (query) {

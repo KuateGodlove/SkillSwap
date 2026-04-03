@@ -252,11 +252,13 @@ exports.registerProvider = async (req, res) => {
 // @access  Public
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = req.body.email?.toLowerCase().trim();
+    const { password } = req.body;
 
-    // Find user
+    // Find user with normalized email
     const user = await User.findOne({ email });
     if (!user) {
+      console.log(`🔍 [Login] User not found: ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
@@ -267,9 +269,13 @@ exports.login = async (req, res) => {
     let isValid;
     try {
       isValid = await bcrypt.compare(password, user.password);
-    } catch (error) { throw new Error("Password comparison failed: " + error.message) }
+    } catch (error) {
+      console.error(`❌ [Login] Bcrypt error for ${email}:`, error.message);
+      throw new Error("Password comparison failed");
+    }
 
     if (!isValid) {
+      console.log(`❌ [Login] Password mismatch: ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'

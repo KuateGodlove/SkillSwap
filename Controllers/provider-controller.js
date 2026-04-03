@@ -47,7 +47,8 @@ exports.createService = async (req, res) => {
       supportPeriod,
       portfolioItems,
       provider: req.userId,
-      isVerified: true // Auto-verify for verified providers
+      isVerified: true, // Auto-verify for verified providers
+      isActive: true    // Ensure service is active by default
     });
 
     res.status(201).json({
@@ -151,14 +152,14 @@ exports.getProviderServices = async (req, res) => {
 // Browse Available Projects
 exports.browseProjects = async (req, res) => {
   try {
-    const { 
-      category, 
-      minBudget, 
-      maxBudget, 
+    const {
+      category,
+      minBudget,
+      maxBudget,
       skills,
       sortBy = 'newest',
-      page = 1, 
-      limit = 12 
+      page = 1,
+      limit = 12
     } = req.query;
 
     const skip = (page - 1) * limit;
@@ -168,7 +169,7 @@ exports.browseProjects = async (req, res) => {
     const providerSkills = provider.skills || [];
 
     // Build query
-    const query = { 
+    const query = {
       status: 'open',
       visibility: { $in: ['public', 'invite-only'] }
     };
@@ -176,7 +177,7 @@ exports.browseProjects = async (req, res) => {
     if (category) query.category = category;
     if (minBudget) query['budgetRange.min'] = { $gte: parseInt(minBudget) };
     if (maxBudget) query['budgetRange.max'] = { $lte: parseInt(maxBudget) };
-    
+
     // Match projects that require provider's skills
     if (providerSkills.length > 0) {
       query.skillsRequired = { $in: providerSkills };
@@ -430,7 +431,7 @@ exports.getProviderDashboardStats = async (req, res) => {
       Service.countDocuments({ provider: req.userId, isActive: true }),
       Proposal.countDocuments({ provider: req.userId }),
       Proposal.countDocuments({ provider: req.userId, status: 'accepted' }),
-      Project.countDocuments({ 
+      Project.countDocuments({
         selectedProposal: { $exists: true },
         status: 'completed'
       }).where('selectedProposal').in(
@@ -469,7 +470,7 @@ async function calculateResponseRate(providerId) {
   const totalProjects = await Project.countDocuments({
     'proposals.provider': providerId
   });
-  
+
   const respondedProjects = await Project.countDocuments({
     'proposals.provider': providerId,
     'proposals.status': { $in: ['submitted', 'under-review', 'shortlisted', 'accepted'] }

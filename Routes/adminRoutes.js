@@ -26,4 +26,10 @@ router.patch('/users/:userId/status', adminController.updateUserStatus);
 // Transaction management
 router.get('/transactions', adminController.getAllTransactions);
 
+// Project management
+router.get('/orders', adminController.getAllOrders);
+
+// Dispute management
+router.get('/disputes', adminController.getDisputedOrders);
+
 module.exports = router;

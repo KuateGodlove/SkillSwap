@@ -16,6 +16,12 @@ router.get('/provider', orderController.getProviderOrders);
 
 // Shared routes
 router.get('/:orderId', orderController.getOrderDetails);
+router.patch('/:orderId/status', orderController.updateOrderStatus);
+
+// Milestone routes
+router.post('/:orderId/milestones', orderController.addMilestone);
+router.put('/:orderId/milestones/:milestoneId', orderController.updateMilestone);
+router.post('/:orderId/milestones/:milestoneId/complete', orderController.completeMilestone);
 router.post('/:orderId/milestones/:milestoneId/approve', orderController.approveMilestone);
 router.post('/:orderId/milestones/:milestoneId/upload', orderController.uploadDeliverable);
 
@@ -23,4 +29,4 @@ router.post('/:orderId/milestones/:milestoneId/upload', orderController.uploadDe
 router.get('/:orderId/messages', orderController.getMessages);
 router.post('/:orderId/messages', orderController.sendMessage);
 
-module.exports = router;
+module.exports = router;

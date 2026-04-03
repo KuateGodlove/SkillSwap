@@ -344,6 +344,7 @@ exports.getPlatformStats = async (req, res) => {
       totalUsers,
       pendingProviders,
       activeProjects: activeOrders,
+      disputeCount: await Order.countDocuments({ status: 'disputed' }),
       monthlyRevenue
     });
   } catch (error) {
@@ -439,5 +440,68 @@ exports.updateUserStatus = async (req, res) => {
       message: 'Failed to update user status',
       error: error.message
     });
+  }
+};
+// @desc    Get disputed orders
+// @route   GET /api/admin/disputes
+// @access  Private (Admin only)
+exports.getDisputedOrders = async (req, res) => {
+  try {
+    const disputes = await Order.find({ status: 'disputed' })
+      .populate('clientId', 'firstName lastName email')
+      .populate('providerId', 'firstName lastName email')
+      .sort({ updatedAt: -1 });
+
+    res.json({
+      success: true,
+      disputes: disputes.map(d => ({
+        ...d.toObject({ getters: true }),
+        id: d._id
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch disputes', error: error.message });
+  }
+};
+// @desc    Get all orders (projects) across the platform
+// @route   GET /api/admin/orders
+// @access  Private (Admin only)
+exports.getAllOrders = async (req, res) => {
+  try {
+    const { status, search, page = 1, limit = 10 } = req.query;
+
+    const query = {};
+    if (status && status !== 'all') query.status = status;
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { orderId: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const orders = await Order.find(query)
+      .populate('clientId', 'firstName lastName email')
+      .populate('providerId', 'firstName lastName email providerDetails.businessName')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await Order.countDocuments(query);
+
+    res.json({
+      success: true,
+      orders: orders.map(o => ({
+        ...o.toObject({ getters: true }),
+        id: o._id
+      })),
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit)
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch platform orders', error: error.message });
   }
 };

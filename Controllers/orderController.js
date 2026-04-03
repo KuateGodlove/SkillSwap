@@ -48,7 +48,7 @@ exports.inquireService = async (req, res) => {
     // Create notification for Provider
     const notification = await Notification.create({
       userId: service.providerId,
-      type: 'order_started', // or 'offer_received'
+      type: 'offer_received',
       title: 'New Service Inquiry',
       message: `${req.user.firstName} is inquiring about your service: ${service.title}`,
       senderId: req.user._id,
@@ -142,6 +142,7 @@ exports.getProviderOrders = async (req, res) => {
     const orders = await Order.find(query)
       .populate('clientId', 'firstName lastName clientDetails.companyName')
       .populate('rfqId', 'title category')
+      .populate('serviceId', 'title category')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
@@ -331,15 +332,15 @@ exports.createOrderFromQuote = async (req, res) => {
       selectedProviderId: quote.providerId._id
     });
 
-    // Create notification for provider
     const notification = await Notification.create({
       userId: quote.providerId._id,
-      type: 'order_started',
+      type: 'request_accepted',
       title: 'New Project Started',
       message: `${req.user.firstName} has started a new project: ${quote.rfqId.title}`,
-      data: { orderId: order._id },
-      link: `/provider/orders/${order._id}`,
-      priority: 'high'
+      senderId: req.user._id,
+      senderName: `${req.user.firstName} ${req.user.lastName}`,
+      senderPhoto: req.user.avatar || '',
+      metadata: { orderId: order._id }
     });
 
     const io = req.app.get('io');
@@ -392,12 +393,12 @@ exports.updateOrderStatus = async (req, res) => {
 
     // Validate status transition
     const validTransitions = {
-      'pending': ['in-progress', 'cancelled'],
-      'in-progress': ['review', 'cancelled'],
-      'review': ['completed', 'in-progress'],
+      'pending': ['in-progress', 'cancelled', 'disputed'],
+      'in-progress': ['review', 'cancelled', 'disputed'],
+      'review': ['completed', 'in-progress', 'disputed'],
       'completed': [],
       'cancelled': [],
-      'disputed': ['in-progress', 'cancelled', 'completed']
+      'disputed': ['in-progress', 'cancelled', 'completed', 'review']
     };
 
     if (!validTransitions[order.status].includes(status)) {
@@ -419,16 +420,43 @@ exports.updateOrderStatus = async (req, res) => {
     const notification = await Notification.create({
       userId: notifyUserId,
       type: 'order_status_change',
-      title: 'Order Status Updated',
-      message: `Order ${order.title} status changed to ${status}`,
-      data: { orderId: order._id, status },
-      link: isClient ? `/provider/orders/${order._id}` : `/client/orders/${order._id}`,
-      priority: 'medium'
+      title: status === 'disputed' ? '⚠️ Order Disputed' : 'Order Status Updated',
+      message: status === 'disputed' 
+        ? `Order "${order.title}" has been flagged for mediation by ${req.user.firstName}.` 
+        : `Order "${order.title}" status changed to ${status}`,
+      senderId: req.user._id,
+      senderName: `${req.user.firstName} ${req.user.lastName}`,
+      senderPhoto: req.user.avatar || '',
+      metadata: { orderId: order._id }
     });
 
     const io = req.app.get('io');
     if (io) {
       io.to(notifyUserId.toString()).emit('newNotification', notification);
+    }
+
+    // NEW: If disputed, also notify all Admins
+    if (status === 'disputed') {
+      try {
+        const admins = await User.find({ role: 'admin' });
+        for (const admin of admins) {
+          const adminNotif = await Notification.create({
+            userId: admin._id,
+            type: 'system_alert',
+            title: '⚖️ New Mediation Required',
+            message: `A dispute has been opened for Order "${order.title}" between ${order.clientId} and ${order.providerId}.`,
+            senderId: req.user._id,
+            senderName: `${req.user.firstName} ${req.user.lastName}`,
+            metadata: { orderId: order._id },
+            important: true
+          });
+          if (io) {
+            io.to(admin._id.toString()).emit('newNotification', adminNotif);
+          }
+        }
+      } catch (adminErr) {
+        console.error('Failed to notify admins of dispute:', adminErr);
+      }
     }
 
     res.json({
@@ -557,9 +585,10 @@ exports.addMilestone = async (req, res) => {
       type: 'milestone_added',
       title: 'New Milestone Added',
       message: `${req.user.firstName} added a new milestone: ${title}`,
-      data: { orderId: order._id, milestone: order.milestones[order.milestones.length - 1] },
-      link: `/client/orders/${order._id}`,
-      priority: 'medium'
+      senderId: req.user._id,
+      senderName: `${req.user.firstName} ${req.user.lastName}`,
+      senderPhoto: req.user.avatar || '',
+      metadata: { orderId: order._id }
     });
 
     const io = req.app.get('io');
@@ -704,9 +733,10 @@ exports.completeMilestone = async (req, res) => {
       type: 'milestone_completed',
       title: 'Milestone Completed',
       message: `${req.user.firstName} completed milestone: ${milestone.title}`,
-      data: { orderId: order._id, milestone },
-      link: `/client/orders/${order._id}`,
-      priority: 'high'
+      senderId: req.user._id,
+      senderName: `${req.user.firstName} ${req.user.lastName}`,
+      senderPhoto: req.user.avatar || '',
+      metadata: { orderId: order._id }
     });
 
     const ioInstance = req.app.get('io');
@@ -818,9 +848,10 @@ exports.approveMilestone = async (req, res) => {
       type: 'milestone_approved',
       title: 'Milestone Approved',
       message: `${req.user.firstName} approved milestone: ${milestone.title}`,
-      data: { orderId: order._id, milestone, feedback },
-      link: `/provider/orders/${order._id}`,
-      priority: 'high'
+      senderId: req.user._id,
+      senderName: `${req.user.firstName} ${req.user.lastName}`,
+      senderPhoto: req.user.avatar || '',
+      metadata: { orderId: order._id }
     });
 
     const ioApp = req.app.get('io');
@@ -897,9 +928,10 @@ exports.requestRevision = async (req, res) => {
       type: 'revision_requested',
       title: 'Revision Requested',
       message: `${req.user.firstName} requested changes for milestone: ${milestone.title}`,
-      data: { orderId: order._id, milestone, feedback },
-      link: `/provider/orders/${order._id}`,
-      priority: 'high'
+      senderId: req.user._id,
+      senderName: `${req.user.firstName} ${req.user.lastName}`,
+      senderPhoto: req.user.avatar || '',
+      metadata: { orderId: order._id }
     });
 
     const ioRev = req.app.get('io');
@@ -996,7 +1028,10 @@ exports.uploadDeliverable = async (req, res) => {
       type: 'milestone_completed',
       title: 'Deliverable Uploaded',
       message: `${req.user.firstName} has uploaded a deliverable for milestone: ${milestone.title}`,
-      metadata: { orderId: order._id, milestoneId: milestone._id }
+      senderId: req.user._id,
+      senderName: `${req.user.firstName} ${req.user.lastName}`,
+      senderPhoto: req.user.avatar || '',
+      metadata: { orderId: order._id }
     });
 
     const io = req.app.get('io');
