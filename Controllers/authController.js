@@ -13,10 +13,10 @@ exports.registerClient = async (req, res) => {
     const { email, password, firstName, lastName, phone, companyName, jobTitle, country } = req.body;
 
     // Basic validation to ensure correct endpoint is being used
-    if (!email || !password || !firstName || !lastName || !companyName) {
+    if (!email || !password || !firstName || !lastName || !companyName || !phone) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields for client registration. Please ensure you are using the correct registration form.'
+        message: 'Missing required fields (email, password, firstName, lastName, companyName, phone).'
       });
     }
 
@@ -132,10 +132,10 @@ exports.registerProvider = async (req, res) => {
     } = req.body;
 
     // Basic validation to ensure correct endpoint is being used
-    if (!email || !password || !firstName || !lastName || !businessName || !specialization) {
+    if (!email || !password || !firstName || !lastName || !businessName || !specialization || !phone) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields for provider application. Please ensure you are using the correct registration form.'
+        message: 'Missing required fields (email, password, firstName, lastName, businessName, specialization, phone).'
       });
     }
 
@@ -292,7 +292,7 @@ exports.login = async (req, res) => {
 
     // Update last login
     user.lastLogin = new Date();
-    await user.save();
+    await user.save({ validateBeforeSave: false });
 
     // Generate JWT
     const token = jwt.sign(
@@ -472,7 +472,7 @@ exports.resetPassword = async (req, res) => {
     user.password = hashedPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
 
     res.json({
       success: true,
@@ -514,7 +514,7 @@ exports.verifyEmail = async (req, res) => {
     user.emailVerified = true;
     user.emailVerificationToken = undefined;
     user.emailVerificationTokenExpire = undefined;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
 
     res.json({
       success: true,
